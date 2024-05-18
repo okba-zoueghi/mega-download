@@ -1,0 +1,3 @@
+[submodule "fritzbox"]
+	path = fritzbox
+	url = https://github.com/okba-zoueghi/fritzbox
