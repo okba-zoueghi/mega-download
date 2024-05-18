@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+
+import random
+import tempfile
+import os
+import shutil
+import string
+from datetime import datetime
+
+class FileUtils:
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def create_tmp_folder():
+        tmp_folder_name = ''.join(random.choices(string.ascii_lowercase + string.digits, k=20))
+        tmp_dir = tempfile.gettempdir()
+        tmp_folder_path = os.path.join(tmp_dir, tmp_folder_name)
+        os.mkdir(tmp_folder_path)
+        print('Tmp folder for download : ', tmp_folder_path)
+        return tmp_folder_path
+
+    @staticmethod
+    def remove_mega_tmp_files(folder_path):
+        for filename in os.listdir(folder_path):
+            if filename.startswith('.'):
+                file_path = os.path.join(folder_path, filename)
+                os.remove(file_path)
+                print(f"Removed mega tmp file: {file_path}")
+
+    @staticmethod
+    def folder_contains_file(folder_path, file_name):
+        for root, dirs, files in os.walk(folder_path):
+            if file_name in files:
+                return True
+        return False
+
+    @staticmethod
+    def move_files_to_destination(source_folder, destination_folder):
+        for root, dirs, files in os.walk(source_folder):
+            for file_name in files:
+                source_file_path = os.path.join(root, file_name)
+                destination_file_path = os.path.join(destination_folder, file_name)
+                print(f"{datetime.now()}: Moving '{file_name}'")
+                shutil.move(source_file_path, destination_file_path)
+                print(f"{datetime.now()}: Moved '{file_name}'")
+
+    @staticmethod
+    def delete_folder(folder_path):
+        shutil.rmtree(folder_path)

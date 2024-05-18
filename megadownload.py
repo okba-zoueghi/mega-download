@@ -1,118 +1,45 @@
 #!/usr/bin/env python
 
 import pexpect
-import string
 import os
-import random
-import tempfile
 import time
 import shutil
 import sys
-import datetime
+from datetime import datetime
 import shlex
-import requests
 from enum import Enum
+from fritzbox.fritzbox import Fritzbox, RequestError
+from fileutils import FileUtils
 
 class DownloadStatus(Enum):
     NO_ERROR = 0
     QUOTA_EXCEEDED = 1
     TIMEOUT_EXCEEDED = 2
-    OTHER_MEGA_GET_ERROR = 3
-
-class Fritzbox:
-    def ___init__(self):
-        pass
-
-    @staticmethod
-    def _check_internet_connection():
-        try:
-            response = requests.get("http://www.google.com", timeout=5)
-            response.raise_for_status()  # Raises an exception for bad status codes (4xx or 5xx)
-            return True
-        except requests.RequestException:
-            return False
-
-    @staticmethod
-    def change_ip_address():
-        reconnect = pexpect.spawn('fritzbox-reconnect.py', timeout=None)
-        reconnect.expect(pexpect.EOF)
-        print('Changing IP address...')
-        time.sleep(10)
-        while not Fritzbox._check_internet_connection():
-            time.sleep(5)
-            print('Changing IP address...')
-        print('IP address changed...')
-
-
-class FileUtils:
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def create_tmp_folder():
-        tmp_folder_name = ''.join(random.choices(string.ascii_lowercase + string.digits, k=20))
-        tmp_dir = tempfile.gettempdir()
-        tmp_folder_path = os.path.join(tmp_dir, tmp_folder_name)
-        os.mkdir(tmp_folder_path)
-        print('Tmp folder for download : ', tmp_folder_path)
-        return tmp_folder_path
-
-    @staticmethod
-    def remove_mega_tmp_files(folder_path):
-        for filename in os.listdir(folder_path):
-            if filename.startswith('.'):
-                file_path = os.path.join(folder_path, filename)
-                os.remove(file_path)
-                print(f"Removed mega tmp file: {file_path}")
-
-    @staticmethod
-    def folder_contains_file(folder_path, file_name):
-        for root, dirs, files in os.walk(folder_path):
-            if file_name in files:
-                return True
-        return False
-
-    @staticmethod
-    def move_files_to_destination(source_folder, destination_folder):
-        for root, dirs, files in os.walk(source_folder):
-            for file_name in files:
-                source_file_path = os.path.join(root, file_name)
-                destination_file_path = os.path.join(destination_folder, file_name)
-                current_time = datetime.datetime.now()
-                print(f"{current_time}: Moving '{file_name}'")
-                shutil.move(source_file_path, destination_file_path)
-                current_time = datetime.datetime.now()
-                print(f"{current_time}: Moved '{file_name}'")
-
-    @staticmethod
-    def delete_folder(folder_path):
-        shutil.rmtree(folder_path)
+    FAILED_TO_CHANGE_IP = 3
+    OTHER_MEGA_GET_ERROR = 100
 
 class MegaDownload:
     def __init__(self, public_link, target_folder, max_download_time):
-        current_time = datetime.datetime.now()
-        print(f"####################################### Megadownload job started at {current_time} #######################################")
+        print(f"####################################### Megadownload job started at {datetime.now()} #######################################")
         self.public_link = public_link
         self.target_folder = target_folder
         self.max_download_time = max_download_time
+        self.fritzbox = Fritzbox('http://fritz.box:49000')
         self.tmp_folder = FileUtils.create_tmp_folder()
         self._login()
 
     def __del__(self):
         self._logout()
         FileUtils.delete_folder(self.tmp_folder)
-        current_time = datetime.datetime.now()
-        print(f"####################################### Megadownload job ended at {current_time} #######################################")
+        print(f"####################################### Megadownload job ended at {datetime.now()} #######################################")
 
     def _login(self):
         p = pexpect.spawn(f"mega-login {self.public_link}")
         p.expect(pexpect.EOF)
-        print('Logged in to: ', self.public_link)
 
     def _logout(self):
         p = pexpect.spawn('mega-logout')
         p.expect(pexpect.EOF)
-        print('Logged out')
 
     @staticmethod
     def is_logged_in():
@@ -122,12 +49,9 @@ class MegaDownload:
 
     def _mega_get(self, link):
         command = f"mega-get {link} {self.tmp_folder}"
-        print('command: ', command)
+        print('Running command: ', command)
         get = pexpect.spawn(command, timeout=self.max_download_time)
         output = ''
-        timeout_exceeded = False
-        quota_exceeded = False
-
         status = DownloadStatus.NO_ERROR
 
         try:
@@ -135,9 +59,8 @@ class MegaDownload:
         except KeyboardInterrupt:
             sys.exit(1)
         except Exception as e:
-            current_time = datetime.datetime.now()
             status = DownloadStatus.TIMEOUT_EXCEEDED
-            print(f"Timeout exceeded for downloading file at {current_time}")
+            print(f"Timeout exceeded for downloading file at {datetime.now()}")
 
         get.close()
 
@@ -150,26 +73,30 @@ class MegaDownload:
         print('mega-get finished with status: ', status, ' ', get.exitstatus)
         return (output, status)
 
-    def _get_dwllink_and_file_name(self):
+    @staticmethod
+    def _has_extension(filename):
+        parts = filename.rsplit('.', 1)
+        return len(parts) == 2 and len(parts[1]) > 0
+
+    def _get_mega_file_path_and_file_name(self):
         p = pexpect.spawn('mega-find *')
         p.expect(pexpect.EOF)
         mega_find_output = p.before.decode().strip()
-        print('Listed files')
-        dwllink_and_file_name = []
+        mega_file_paths_and_file_names = []
         entries = mega_find_output.split('\n')
         for entry in entries:
             entry = entry.replace('\r','')
-            if entry.endswith('.mkv') or entry.endswith('.mp4'):
+            if self._has_extension(entry):
                 split_entry = entry.split('/')
                 download_link = os.path.join(*split_entry)
                 posix_path = shlex.quote(download_link)
                 file_name = split_entry[-1]
-                dwllink_and_file_name.append((posix_path, file_name))
-        return dwllink_and_file_name
+                mega_file_paths_and_file_names.append((posix_path, file_name))
+        return mega_file_paths_and_file_names
 
-    def _get_download_links_of_missing_files(self, dwllink_and_file_name):
+    def _get_download_links_of_missing_files(self, mega_file_paths_and_file_names):
         download_links = []
-        for download_link, file_name in dwllink_and_file_name:
+        for download_link, file_name in mega_file_paths_and_file_names:
             if not FileUtils.folder_contains_file(self.target_folder, file_name):
                 print('File missing: ', file_name)
                 download_links.append(download_link)
@@ -179,16 +106,23 @@ class MegaDownload:
 
     def download_files(self):
         status = DownloadStatus.NO_ERROR
-        dwllink_and_file_name = self._get_dwllink_and_file_name()
+        mega_file_paths_and_file_names = self._get_mega_file_path_and_file_name()
         while True:
-            download_links = self._get_download_links_of_missing_files(dwllink_and_file_name)
+            download_links = self._get_download_links_of_missing_files(mega_file_paths_and_file_names)
             if not download_links:
                 break
 
             unexpected_error = False
+            ip_change_failure = False
             for link in download_links:
                 self._logout()
-                Fritzbox.change_ip_address()
+                print('Changing IP address')
+                print('Current IP: ', self.fritzbox.get_public_ip())
+                change_ip_error_code = self.fritzbox.change_ip_address_block()
+                if change_ip_error_code != RequestError.NO_ERROR:
+                    ip_change_failure = True
+                    break
+                print('New IP: ', self.fritzbox.get_public_ip())
                 self._login()
                 output, status = self._mega_get(link)
                 if status == DownloadStatus.TIMEOUT_EXCEEDED:
@@ -200,8 +134,11 @@ class MegaDownload:
                     break
 
             if unexpected_error:
-                current_time = datetime.datetime.now()
-                print(f"####################################### {current_time} Unexpected error encountered, aborting...  #######################################")
+                print(f"{datetime.now()} Unexpected mega-get error encountered, aborting...")
+                break
+
+            if ip_change_failure:
+                print(f"{datetime.now()} Failed to change the IP address, aborting...")
                 break
 
         return status
