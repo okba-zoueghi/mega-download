@@ -47,9 +47,9 @@ class MegaDownload:
         return (p.wait() == 0)
 
 
-    def _mega_get(self, link):
-        command = f"mega-get {link} {self.tmp_folder}"
-        print('Running command: ', command)
+    def _mega_get(self, mega_file_path):
+        command = f"mega-get {mega_file_path} {self.tmp_folder}"
+        print(f'Download of file -- {mega_file_path} -- is ongoing...')
         get = pexpect.spawn(command, timeout=self.max_download_time)
         output = ''
         status = DownloadStatus.NO_ERROR
@@ -94,37 +94,38 @@ class MegaDownload:
                 mega_file_paths_and_file_names.append((posix_path, file_name))
         return mega_file_paths_and_file_names
 
-    def _get_download_links_of_missing_files(self, mega_file_paths_and_file_names):
-        download_links = []
-        for download_link, file_name in mega_file_paths_and_file_names:
+    def _get_mega_download_paths_of_missing_files(self, mega_file_paths_and_file_names):
+        mega_download_paths = []
+        for mega_file_path, file_name in mega_file_paths_and_file_names:
             if not FileUtils.folder_contains_file(self.target_folder, file_name):
                 print('File missing: ', file_name)
-                download_links.append(download_link)
-        if not download_links:
+                mega_download_paths.append(mega_file_path)
+        if not mega_download_paths:
             print('No file is missing')
-        return download_links
+        return mega_download_paths
 
     def download_files(self):
         status = DownloadStatus.NO_ERROR
         mega_file_paths_and_file_names = self._get_mega_file_path_and_file_name()
         while True:
-            download_links = self._get_download_links_of_missing_files(mega_file_paths_and_file_names)
-            if not download_links:
+            mega_download_paths = self._get_mega_download_paths_of_missing_files(mega_file_paths_and_file_names)
+            if not mega_download_paths:
                 break
 
             unexpected_error = False
             ip_change_failure = False
-            for link in download_links:
+            for mega_file_path in mega_download_paths:
                 self._logout()
                 print('Changing IP address')
                 print('Current IP: ', self.fritzbox.get_public_ip())
                 change_ip_error_code = self.fritzbox.change_ip_address_block()
                 if change_ip_error_code != RequestError.NO_ERROR:
                     ip_change_failure = True
+                    status = DownloadStatus.FAILED_TO_CHANGE_IP
                     break
                 print('New IP: ', self.fritzbox.get_public_ip())
                 self._login()
-                output, status = self._mega_get(link)
+                output, status = self._mega_get(mega_file_path)
                 if status == DownloadStatus.TIMEOUT_EXCEEDED:
                     FileUtils.remove_mega_tmp_files(self.tmp_folder)
                 elif status == DownloadStatus.NO_ERROR:
