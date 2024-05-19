@@ -29,6 +29,9 @@ from fritzbox.fritzbox import Fritzbox, RequestError
 from fileutils import FileUtils
 
 class DownloadStatus(Enum):
+    """
+    Enum to represent different download statuses.
+    """
     NO_ERROR = 0
     QUOTA_EXCEEDED = 1
     TIMEOUT_EXCEEDED = 2
@@ -36,7 +39,18 @@ class DownloadStatus(Enum):
     OTHER_MEGA_GET_ERROR = 100
 
 class MegaDownload:
+    """
+    Class to handle downloading files from Mega.nz using public links without quoata restrictions.
+    This is achieved through changing the IP address before starting each file download.
+    """
     def __init__(self, public_link, target_folder, max_download_time):
+        """
+        Initialize the MegaDownload instance.
+
+        :param public_link: The public Mega.nz link to download from.
+        :param target_folder: The folder to download the files to.
+        :param max_download_time: Maximum time allowed for the download of a single file in seconds.
+        """
         print(f"####################################### Megadownload job started at {datetime.now()} #######################################")
         self.public_link = public_link
         self.target_folder = target_folder
@@ -46,25 +60,45 @@ class MegaDownload:
         self._login()
 
     def __del__(self):
+        """
+        Destructor to handle cleanup operations.
+        """
         self._logout()
         FileUtils.delete_folder(self.tmp_folder)
         print(f"####################################### Megadownload job ended at {datetime.now()} #######################################")
 
     def _login(self):
+        """
+        Log in to the public link.
+        """
         p = pexpect.spawn(f"mega-login {self.public_link}")
         p.expect(pexpect.EOF)
 
     def _logout(self):
+        """
+        Log out from public link.
+        """
         p = pexpect.spawn('mega-logout')
         p.expect(pexpect.EOF)
 
     @staticmethod
     def is_logged_in():
+        """
+        Check if a login to public link is active.
+
+        :return: True if logged in, False otherwise.
+        """
         p = pexpect.spawn('mega-ls')
         return (p.wait() == 0)
 
 
     def _mega_get(self, mega_file_path):
+        """
+        Download a file from Mega.nz.
+
+        :param mega_file_path: The path of the file to download.
+        :return: A tuple containing the output and the download status.
+        """
         command = f"mega-get {mega_file_path} {self.tmp_folder}"
         print(f'Download of file -- {mega_file_path} -- is ongoing...')
         get = pexpect.spawn(command, timeout=self.max_download_time)
@@ -92,10 +126,21 @@ class MegaDownload:
 
     @staticmethod
     def _has_extension(filename):
+        """
+        Check if the filename has an extension.
+
+        :param filename: The name of the file to check.
+        :return: True if the file has an extension, False otherwise.
+        """
         parts = filename.rsplit('.', 1)
         return len(parts) == 2 and len(parts[1]) > 0
 
     def _get_mega_file_path_and_file_name(self):
+        """
+        Retrieve the file paths and file names from the public link.
+
+        :return: A list of tuples containing file paths and file names.
+        """
         p = pexpect.spawn('mega-find *')
         p.expect(pexpect.EOF)
         mega_find_output = p.before.decode().strip()
@@ -112,6 +157,12 @@ class MegaDownload:
         return mega_file_paths_and_file_names
 
     def _get_mega_download_paths_of_missing_files(self, mega_file_paths_and_file_names):
+        """
+        Get the download paths of missing files.
+
+        :param mega_file_paths_and_file_names: List of tuples containing file paths and file names.
+        :return: A list of mega file paths for files that are missing in the target folder.
+        """
         mega_download_paths = []
         for mega_file_path, file_name in mega_file_paths_and_file_names:
             if not FileUtils.folder_contains_file(self.target_folder, file_name):
@@ -122,6 +173,12 @@ class MegaDownload:
         return mega_download_paths
 
     def download_files(self):
+        """
+        Download missing files.
+        The IP address is changed before every download to avoid exceeding the mega download quota.
+
+        :return: The final download status.
+        """
         status = DownloadStatus.NO_ERROR
         mega_file_paths_and_file_names = self._get_mega_file_path_and_file_name()
         while True:

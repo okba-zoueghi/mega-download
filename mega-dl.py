@@ -23,7 +23,7 @@ from megadownload import MegaDownload
 max_download_time = 3600
 
 # Parse args
-parser = argparse.ArgumentParser(prog='mega-download', description='Looks for missing files in target folder and downloads them')
+parser = argparse.ArgumentParser(description='Looks for missing files in target folder and downloads them with changing the IP address before each file download')
 parser.add_argument('-l', '--link', action='append')
 parser.add_argument('-t', '--target-folder')
 args = parser.parse_args()
