@@ -39,3 +39,4 @@ else:
     for mega_folder_link in mega_folder_links:
         mega_download = MegaDownload(mega_folder_link, target_folder, max_download_time)
         mega_download.download_files()
+        del mega_download
