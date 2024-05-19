@@ -23,18 +23,15 @@ from megadownload import MegaDownload
 # Parse args
 parser = argparse.ArgumentParser(description='Looks for missing files in target folder and downloads them with changing the IP address before each file download')
 parser.add_argument('-l', '--link', required=True, action='append', help='mega public link')
-parser.add_argument('-t', '--target-folder', required=True, help='taget folder to store successfully downloaded files')
-parser.add_argument('-m', '--max-download-time', type=int, default=3600, help='max download time for a single file in seconds')
-parser.add_argument('-f', '--force-logout', action='store_true', help='force mega logout')
+parser.add_argument('-t', '--target-folder', required=True, help='Target folder to store successfully downloaded files')
+parser.add_argument('-m', '--max-download-time', type=int, default=3600, help='Max download time for a single file in seconds')
+parser.add_argument('-f', '--force-logout', action='store_true', help='Force mega logout')
 
 args = parser.parse_args()
 mega_folder_links = args.link
 target_folder = args.target_folder
 max_download_time = args.max_download_time
 force_logout = args.force_logout
-
-if force_logout:
-    print('Force logout')
 
 if MegaDownload.is_logged_in() and not force_logout:
     print("Session ongoing, aborting...")
