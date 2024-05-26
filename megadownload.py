@@ -63,7 +63,7 @@ class MegaDownload:
         """
         Destructor to handle cleanup operations.
         """
-        self._logout()
+        self.logout()
         FileUtils.delete_folder(self.tmp_folder)
         print(f"####################################### Megadownload job ended at {datetime.now()} #######################################")
 
@@ -74,7 +74,8 @@ class MegaDownload:
         p = pexpect.spawn(f"mega-login {self.public_link}")
         p.expect(pexpect.EOF)
 
-    def _logout(self):
+    @staticmethod
+    def logout():
         """
         Log out from public link.
         """
@@ -189,7 +190,7 @@ class MegaDownload:
             unexpected_error = False
             ip_change_failure = False
             for mega_file_path in mega_download_paths:
-                self._logout()
+                self.logout()
                 print('Changing IP address')
                 print('Current IP: ', self.fritzbox.get_public_ip())
                 change_ip_error_code = self.fritzbox.change_ip_address_block()

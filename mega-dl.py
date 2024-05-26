@@ -33,7 +33,10 @@ target_folder = args.target_folder
 max_download_time = args.max_download_time
 force_logout = args.force_logout
 
-if MegaDownload.is_logged_in() and not force_logout:
+if force_logout:
+    MegaDownload.logout()
+
+if MegaDownload.is_logged_in():
     print("Session ongoing, aborting...")
 else:
     for mega_folder_link in mega_folder_links:
