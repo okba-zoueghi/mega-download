@@ -38,6 +38,10 @@ class DownloadStatus(Enum):
     FAILED_TO_CHANGE_IP = 3
     OTHER_MEGA_GET_ERROR = 100
 
+class MegaDownloadException(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
 class MegaDownload:
     """
     Class to handle downloading files from Mega.nz using public links without quoata restrictions.
@@ -63,24 +67,54 @@ class MegaDownload:
         """
         Destructor to handle cleanup operations.
         """
-        self.logout()
         FileUtils.delete_folder(self.tmp_folder)
+        self.logout()
         print(f"####################################### Megadownload job ended at {datetime.now()} #######################################")
+
+    @staticmethod
+    def _spawn(command, timeout=30):
+        output = ''
+        failure = ''
+        timed_out = False
+        p = pexpect.spawn(command, timeout=timeout)
+        try:
+            output = p.read().decode()
+        except pexpect.TIMEOUT:
+            timed_out = True
+            failure = "Process timed out."
+            print(failure)
+        except pexpect.ExceptionPexpect as e:
+            failure = f"An error occurred: {e}"
+            print(failure)
+        except Exception as e:
+            failure = f"An unexpected error occurred: {e}"
+            print(failure)
+        p.close()
+        exit_code = p.exitstatus
+        return (exit_code, output, failure, timed_out)
+
 
     def _login(self):
         """
         Log in to the public link.
         """
-        p = pexpect.spawn(f"mega-login {self.public_link}")
-        p.expect(pexpect.EOF)
+        exit_code, output, failure, timed_out = MegaDownload._spawn(f"mega-login {self.public_link}")
+        if exit_code != 0:
+            error_msg = f'Login failed with exit code {exit_code}'
+            print(error_msg)
+            raise MegaDownloadException(error_msg)
+
 
     @staticmethod
     def logout():
         """
         Log out from public link.
         """
-        p = pexpect.spawn('mega-logout')
-        p.expect(pexpect.EOF)
+        exit_code, output, failure, timed_out = MegaDownload._spawn("mega-logout")
+        if exit_code != 0:
+            error_msg = f'Logout failed with exit code {exit_code}'
+            print(error_msg)
+            raise MegaDownloadException(error_msg)
 
     @staticmethod
     def is_logged_in():
@@ -89,8 +123,12 @@ class MegaDownload:
 
         :return: True if logged in, False otherwise.
         """
-        p = pexpect.spawn('mega-ls')
-        return (p.wait() == 0)
+        exit_code, output, failure, timed_out = MegaDownload._spawn("mega-ls")
+        if exit_code == None:
+            error_msg = f'Login check failed'
+            print(error_msg)
+            raise MegaDownloadException(error_msg)
+        return (exit_code == 0)
 
 
     def _mega_get(self, mega_file_path):
@@ -100,29 +138,20 @@ class MegaDownload:
         :param mega_file_path: The path of the file to download.
         :return: A tuple containing the output and the download status.
         """
+        status = DownloadStatus.NO_ERROR
         command = f"mega-get {mega_file_path} {self.tmp_folder}"
         print(f'Download of file -- {mega_file_path} -- is ongoing...')
-        get = pexpect.spawn(command, timeout=self.max_download_time)
-        output = ''
-        status = DownloadStatus.NO_ERROR
-
-        try:
-            output = get.read().decode()
-        except KeyboardInterrupt:
-            sys.exit(1)
-        except Exception as e:
-            status = DownloadStatus.TIMEOUT_EXCEEDED
+        exit_code, output, failure, timed_out = MegaDownload._spawn(command, self.max_download_time)
+        if timed_out:
             print(f"Timeout exceeded for downloading file at {datetime.now()}")
+            status = DownloadStatus.TIMEOUT_EXCEEDED
 
-        get.close()
-
-        if (status == DownloadStatus.NO_ERROR) and (get.exitstatus != 0):
-            if get.exitstatus == 11:
+        if (status == DownloadStatus.NO_ERROR) and (exit_code != 0):
+            if exit_code == 11:
                 status = DownloadStatus.QUOTA_EXCEEDED
             else:
                 status = DownloadStatus.OTHER_MEGA_GET_ERROR
-
-        print('mega-get finished with status: ', status, ' ', get.exitstatus)
+        print('mega-get finished with status: ', status, ' and exit code: ', exit_code)
         return (output, status)
 
     @staticmethod
@@ -142,9 +171,12 @@ class MegaDownload:
 
         :return: A list of tuples containing file paths and file names.
         """
-        p = pexpect.spawn('mega-find *')
-        p.expect(pexpect.EOF)
-        mega_find_output = p.before.decode().strip()
+        exit_code, output, failure, timed_out = MegaDownload._spawn('mega-find *')
+        if exit_code != 0:
+            error_msg = f'Listing files failed with exit code {exit_code}'
+            print(error_msg)
+            raise MegaDownloadException(error_msg)
+        mega_find_output = output.strip()
         mega_file_paths_and_file_names = []
         entries = mega_find_output.split('\n')
         for entry in entries:
