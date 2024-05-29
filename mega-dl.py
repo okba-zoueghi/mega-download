@@ -23,7 +23,7 @@ from megadownload import MegaDownloadFolder, MegaDownloadFile, MegaDownloadExcep
 # Parse args
 parser = argparse.ArgumentParser(description='Looks for missing files in target folder and downloads them with changing the IP address before each file download')
 parser.add_argument('-l', '--link', required=True, action='append', help='mega public link')
-parser.add_argument('-t', '--target-folder', required=True, help='Target folder to store successfully downloaded files')
+parser.add_argument('-t', '--target-folder', required=True, help='Target folder absolute path to store successfully downloaded files')
 parser.add_argument('-m', '--max-download-time', type=int, default=3600, help='Max download time for a single file in seconds')
 parser.add_argument('-f', '--force-logout', action='store_true', help='Force mega logout')
 
