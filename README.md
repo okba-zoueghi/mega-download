@@ -3,7 +3,7 @@
 CLI implemented in python that allows downloading files from a Mega.nz public link to a target folder (only missing files are downloaded) without quota restriction.
 Bypassing the quota is achieved by changing the IP address of the fritzbox before each file download.
 
-The same CLI could be used with another router in case a function for changing the IP for the router is available (needs to be adapted).
+The same CLI could be used with another router. To do that you shall update the callback function ```change_ip_address()``` in the file ```changeipcallback.py``` to change the ip address of your router.
 
 ## Clone and Install Dependencies
 
@@ -46,5 +46,5 @@ The '--link' option can be used multiple times to downloads files from several l
 The command will fetch the given links and check for missing files in the target folder and download them.
 
 ```shell
-mega-dl.py --link '<link1>' --link '<link2>' --link '<link3>' --target-folder '<path to target folder>' --force-logout
+mega-dl.py -f --link '<link1>' --link '<link2>' --link '<link3>' --target-folder '<path to target folder>' --force-logout
 ```
