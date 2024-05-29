@@ -27,6 +27,7 @@ import shlex
 from enum import Enum
 from fritzbox.fritzbox import Fritzbox, RequestError
 from fileutils import FileUtils
+from changeipcallback import ChangeIpException, change_ip_address
 
 class DownloadStatus(Enum):
     """
@@ -47,7 +48,7 @@ class MegaDownload:
     Class to handle downloading files from Mega.nz using public links without quoata restrictions.
     This is achieved through changing the IP address before starting each file download.
     """
-    def __init__(self, public_link, target_folder, max_download_time):
+    def __init__(self, public_link, target_folder, max_download_time, change_ip_callback = change_ip_address):
         """
         Initialize the MegaDownload instance.
 
@@ -61,6 +62,7 @@ class MegaDownload:
         self.max_download_time = max_download_time
         self.fritzbox = Fritzbox('http://fritz.box:49000')
         self.tmp_folder = FileUtils.create_tmp_folder()
+        self.change_ip_callback = change_ip_callback
         self._login()
 
     def __del__(self):
@@ -210,43 +212,22 @@ class MegaDownload:
         Download missing files.
         The IP address is changed before every download to avoid exceeding the mega download quota.
 
-        :return: The final download status.
+        :return: If download fails the functions throws MegaDownloadException or ChangeIpException, otherwise all files are
+        downloaded successfully.
         """
-        status = DownloadStatus.NO_ERROR
         mega_file_paths_and_file_names = self._get_mega_file_path_and_file_name()
         while True:
             mega_download_paths = self._get_mega_download_paths_of_missing_files(mega_file_paths_and_file_names)
             if not mega_download_paths:
                 break
-
-            unexpected_error = False
-            ip_change_failure = False
             for mega_file_path in mega_download_paths:
                 self.logout()
-                print('Changing IP address')
-                print('Current IP: ', self.fritzbox.get_public_ip())
-                change_ip_error_code = self.fritzbox.change_ip_address_block()
-                if change_ip_error_code != RequestError.NO_ERROR:
-                    ip_change_failure = True
-                    status = DownloadStatus.FAILED_TO_CHANGE_IP
-                    break
-                print('New IP: ', self.fritzbox.get_public_ip())
+                self.change_ip_callback()
                 self._login()
                 output, status = self._mega_get(mega_file_path)
-                if status == DownloadStatus.TIMEOUT_EXCEEDED:
-                    FileUtils.remove_mega_tmp_files(self.tmp_folder)
-                elif status == DownloadStatus.NO_ERROR:
+                if status == DownloadStatus.NO_ERROR:
                     FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
+                elif status == DownloadStatus.TIMEOUT_EXCEEDED:
+                    FileUtils.remove_mega_tmp_files(self.tmp_folder)
                 else:
-                    unexpected_error = True
-                    break
-
-            if unexpected_error:
-                print(f"{datetime.now()} Unexpected mega-get error encountered, aborting...")
-                break
-
-            if ip_change_failure:
-                print(f"{datetime.now()} Failed to change the IP address, aborting...")
-                break
-
-        return status
+                    raise MegaDownloadException(f"{datetime.now()} Unexpected mega-get error encountered during downloading {mega_file_path}")
