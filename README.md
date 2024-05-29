@@ -46,5 +46,5 @@ The '--link' option can be used multiple times to downloads files from several l
 The command will fetch the given links and check for missing files in the target folder and download them.
 
 ```shell
-mega-dl.py -f --link '<link1>' --link '<link2>' --link '<link3>' --target-folder '<path to target folder>' --force-logout
+mega-dl.py --link '<link1>' --link '<link2>' --link '<link3>' --target-folder '<path to target folder>' --force-logout
 ```
