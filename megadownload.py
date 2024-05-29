@@ -133,9 +133,9 @@ class MegaDownloadFile:
         if status == DownloadStatus.NO_ERROR:
             FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
         elif status == DownloadStatus.TIMEOUT_EXCEEDED:
-            FileUtils.remove_mega_tmp_files(self.tmp_folder)
+            raise MegaDownloadException(f"{datetime.now()} Timeout exceeded during downloading {self.file_link}")
         else:
-            raise MegaDownloadException(f"{datetime.now()} Unexpected mega-get error encountered during downloading {mega_file_path}")
+            raise MegaDownloadException(f"{datetime.now()} Unexpected mega-get error encountered during downloading {self.file_link}")
 
 class MegaDownloadFolder:
     """
