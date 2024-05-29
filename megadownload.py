@@ -43,24 +43,118 @@ class MegaDownloadException(Exception):
     def __init__(self, message):
         super().__init__(message)
 
-class MegaDownload:
+class MegaDownloadFile:
     """
-    Class to handle downloading files from Mega.nz using public links without quoata restrictions.
-    This is achieved through changing the IP address before starting each file download.
+    Class to handle downloading a file from Mega.nz public link without quoata restrictions.
+    This is achieved through changing the IP address before starting the file download.
     """
-    def __init__(self, public_link, target_folder, max_download_time, change_ip_callback = change_ip_address):
+    def __init__(self, file_link, target_folder, max_download_time, change_ip_callback = change_ip_address):
         """
-        Initialize the MegaDownload instance.
+        Initialize the MegaDownloadFolder instance.
 
-        :param public_link: The public Mega.nz link to download from.
+        :param file_link: The public Mega.nz file link to download from.
         :param target_folder: The folder to download the files to.
         :param max_download_time: Maximum time allowed for the download of a single file in seconds.
+        :change_ip_callback: Callback function for changing ip address.
         """
-        print(f"####################################### Megadownload job started at {datetime.now()} #######################################")
-        self.public_link = public_link
+        print(f"####################################### MegaDownloadFile job ended at {datetime.now()} #######################################")
+        self.file_link = file_link
         self.target_folder = target_folder
         self.max_download_time = max_download_time
-        self.fritzbox = Fritzbox('http://fritz.box:49000')
+        self.tmp_folder = FileUtils.create_tmp_folder()
+        self.change_ip_callback = change_ip_callback
+
+    def __del__(self):
+        """
+        Destructor to handle cleanup operations.
+        """
+        FileUtils.delete_folder(self.tmp_folder)
+        print(f"####################################### MegaDownloadFile job ended at {datetime.now()} #######################################")
+
+    @staticmethod
+    def is_file_link(link):
+        return (("mega.nz/file/" in link) or ("mega.nz/#!" in link))
+
+    @staticmethod
+    def _spawn(command, timeout=30):
+        output = ''
+        failure = ''
+        timed_out = False
+        p = pexpect.spawn(command, timeout=timeout)
+        try:
+            output = p.read().decode()
+        except pexpect.TIMEOUT:
+            timed_out = True
+            failure = "Process timed out."
+            print(failure)
+        except pexpect.ExceptionPexpect as e:
+            failure = f"An error occurred: {e}"
+            print(failure)
+        except Exception as e:
+            failure = f"An unexpected error occurred: {e}"
+            print(failure)
+        p.close()
+        exit_code = p.exitstatus
+        return (exit_code, output, failure, timed_out)
+
+    def _mega_get(self, file_link):
+        """
+        Download a file from Mega.nz.
+
+        :param mega_file_path: The path of the file to download.
+        :return: A tuple containing the output and the download status.
+        """
+        status = DownloadStatus.NO_ERROR
+        command = f"mega-get {file_link} {self.tmp_folder}"
+        print(f'Download of file -- {file_link} -- is ongoing...')
+        exit_code, output, failure, timed_out = MegaDownloadFile._spawn(command, self.max_download_time)
+        if timed_out:
+            print(f"Timeout exceeded for downloading file at {datetime.now()}")
+            status = DownloadStatus.TIMEOUT_EXCEEDED
+
+        if (status == DownloadStatus.NO_ERROR) and (exit_code != 0):
+            if exit_code == 11:
+                status = DownloadStatus.QUOTA_EXCEEDED
+            else:
+                status = DownloadStatus.OTHER_MEGA_GET_ERROR
+        print('mega-get finished with status: ', status, ' and exit code: ', exit_code)
+        return (output, status)
+
+    def download_file(self):
+        """
+        Download file.
+        The IP address is changed before the download to avoid exceeding the mega download quota.
+
+        :return: If download fails the functions throws MegaDownloadException or ChangeIpException, otherwise the file is
+        downloaded successfully.
+        """
+        self.change_ip_callback()
+        output, status = self._mega_get(self.file_link)
+        if status == DownloadStatus.NO_ERROR:
+            FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
+        elif status == DownloadStatus.TIMEOUT_EXCEEDED:
+            FileUtils.remove_mega_tmp_files(self.tmp_folder)
+        else:
+            raise MegaDownloadException(f"{datetime.now()} Unexpected mega-get error encountered during downloading {mega_file_path}")
+
+class MegaDownloadFolder:
+    """
+    Class to handle downloading files from Mega.nz folder using public links without quoata restrictions.
+    This is achieved through changing the IP address before starting each file download.
+    """
+    def __init__(self, folder_link, target_folder, max_download_time, change_ip_callback = change_ip_address):
+        """
+        Initialize the MegaDownloadFolder instance.
+
+        :param folder_link: The public Mega.nz folder link to download from.
+        :param target_folder: The folder to download the files to.
+        :param max_download_time: Maximum time allowed for the download of a single file in seconds.
+        :change_ip_callback: Callback function for changing ip address.
+        """
+        print(f"####################################### MegaDownloadFolder job started at {datetime.now()} #######################################")
+        self.folder_link = folder_link
+        self.target_folder = target_folder
+        self.max_download_time = max_download_time
         self.tmp_folder = FileUtils.create_tmp_folder()
         self.change_ip_callback = change_ip_callback
         self._login()
@@ -71,7 +165,7 @@ class MegaDownload:
         """
         FileUtils.delete_folder(self.tmp_folder)
         self.logout()
-        print(f"####################################### Megadownload job ended at {datetime.now()} #######################################")
+        print(f"####################################### MegaDownloadFolder job ended at {datetime.now()} #######################################")
 
     @staticmethod
     def _spawn(command, timeout=30):
@@ -100,7 +194,7 @@ class MegaDownload:
         """
         Log in to the public link.
         """
-        exit_code, output, failure, timed_out = MegaDownload._spawn(f"mega-login {self.public_link}")
+        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn(f"mega-login {self.folder_link}")
         if exit_code != 0:
             error_msg = f'Login failed with exit code {exit_code}'
             print(error_msg)
@@ -112,7 +206,7 @@ class MegaDownload:
         """
         Log out from public link.
         """
-        exit_code, output, failure, timed_out = MegaDownload._spawn("mega-logout")
+        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn("mega-logout")
         if exit_code != 0:
             error_msg = f'Logout failed with exit code {exit_code}'
             print(error_msg)
@@ -125,7 +219,7 @@ class MegaDownload:
 
         :return: True if logged in, False otherwise.
         """
-        exit_code, output, failure, timed_out = MegaDownload._spawn("mega-ls")
+        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn("mega-ls")
         if exit_code == None:
             error_msg = f'Login check failed'
             print(error_msg)
@@ -143,7 +237,7 @@ class MegaDownload:
         status = DownloadStatus.NO_ERROR
         command = f"mega-get {mega_file_path} {self.tmp_folder}"
         print(f'Download of file -- {mega_file_path} -- is ongoing...')
-        exit_code, output, failure, timed_out = MegaDownload._spawn(command, self.max_download_time)
+        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn(command, self.max_download_time)
         if timed_out:
             print(f"Timeout exceeded for downloading file at {datetime.now()}")
             status = DownloadStatus.TIMEOUT_EXCEEDED
@@ -173,7 +267,7 @@ class MegaDownload:
 
         :return: A list of tuples containing file paths and file names.
         """
-        exit_code, output, failure, timed_out = MegaDownload._spawn('mega-find *')
+        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn('mega-find *')
         if exit_code != 0:
             error_msg = f'Listing files failed with exit code {exit_code}'
             print(error_msg)

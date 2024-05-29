@@ -18,7 +18,7 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import argparse
-from megadownload import MegaDownload, MegaDownloadException
+from megadownload import MegaDownloadFolder, MegaDownloadFile, MegaDownloadException
 
 # Parse args
 parser = argparse.ArgumentParser(description='Looks for missing files in target folder and downloads them with changing the IP address before each file download')
@@ -28,23 +28,27 @@ parser.add_argument('-m', '--max-download-time', type=int, default=3600, help='M
 parser.add_argument('-f', '--force-logout', action='store_true', help='Force mega logout')
 
 args = parser.parse_args()
-mega_folder_links = args.link
+mega_links = args.link
 target_folder = args.target_folder
 max_download_time = args.max_download_time
 force_logout = args.force_logout
 
 if force_logout:
-    MegaDownload.logout()
+    MegaDownloadFolder.logout()
 
-if MegaDownload.is_logged_in():
+if MegaDownloadFolder.is_logged_in():
     print("Session ongoing, aborting...")
 else:
-    for mega_folder_link in mega_folder_links:
+    for link in mega_links:
         try:
-            mega_download = MegaDownload(mega_folder_link, target_folder, max_download_time)
-            mega_download.download_files()
-            del mega_download
+            if MegaDownloadFile.is_file_link(link):
+                mega_download = MegaDownloadFile(link, target_folder, max_download_time)
+                mega_download.download_file()
+            else:
+                mega_download = MegaDownloadFolder(link, target_folder, max_download_time)
+                mega_download.download_files()
+                del mega_download
         except MegaDownloadException as e:
-            print(f"Fatal error: {e} - aborting download from {mega_folder_link}")
+            print(f"Fatal error: {e} - aborting download from {link}")
         except Exception as e:
-            print(f"An unexpected error occurred: {e} - aborting download from {mega_folder_link}")
+            print(f"An unexpected error occurred: {e} - aborting download from {link}")
