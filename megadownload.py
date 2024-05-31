@@ -68,6 +68,51 @@ class MegaCmdHelper:
     def is_file_link(link):
         return (("mega.nz/file/" in link) or ("mega.nz/#!" in link))
 
+    @staticmethod
+    def logout():
+        """
+        Log out from public link.
+        """
+        spawn_status, process_exit_code, output = SpawnHelper.spawn("mega-logout")
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                raise MegaDownloadException(f"Logout failed with error code: {process_exit_code}\n{output}")
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            raise MegaDownloadException('Logout failed due to timeout')
+        else:
+            raise MegaDownloadException('Logout failed due to unexpected error')
+
+    @staticmethod
+    def is_logged_in():
+        """
+        Check if a login to public link is active.
+
+        :return: True if logged in, False otherwise.
+        """
+        spawn_status, process_exit_code, output = SpawnHelper.spawn("mega-ls")
+        logged_in = True
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                logged_in = False
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            raise MegaDownloadException('Login check failed due to timeout')
+        else:
+            raise MegaDownloadException('Login check failed due to unexpected error')
+
+    @staticmethod
+    def login(folder_link):
+        """
+        Log in to the public link.
+        """
+        spawn_status, process_exit_code, output = SpawnHelper.spawn(f"mega-login {folder_link}")
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                raise MegaDownloadException(f"Loging failed with error code: {process_exit_code}\n{output}")
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            raise MegaDownloadException('Login failed due to timeout')
+        else:
+            raise MegaDownloadException('Login failed due to unexpected error')
+
 class MegaDownloadFile:
     """
     Class to handle downloading a file from Mega.nz public link without quoata restrictions.
@@ -133,60 +178,15 @@ class MegaDownloadFolder:
         self.max_download_time = max_download_time
         self.tmp_folder = FileUtils.create_tmp_folder()
         self.change_ip_callback = change_ip_callback
-        self._login()
+        MegaCmdHelper.login(self.folder_link)
 
     def __del__(self):
         """
         Destructor to handle cleanup operations.
         """
         FileUtils.delete_folder(self.tmp_folder)
-        self.logout()
+        MegaCmdHelper.logout()
         print(f"####################################### MegaDownloadFolder job ended at {datetime.now()} #######################################")
-
-    def _login(self):
-        """
-        Log in to the public link.
-        """
-        spawn_status, process_exit_code, output = SpawnHelper.spawn(f"mega-login {self.folder_link}")
-        if spawn_status == SpawnStatus.NO_ERROR:
-            if process_exit_code != 0:
-                raise MegaDownloadException(f"Loging failed with error code: {process_exit_code}\n{output}")
-        elif spawn_status == SpawnStatus.TIMEOUT:
-            raise MegaDownloadException('Login failed due to timeout')
-        else:
-            raise MegaDownloadException('Login failed due to unexpected error')
-
-
-    @staticmethod
-    def logout():
-        """
-        Log out from public link.
-        """
-        spawn_status, process_exit_code, output = SpawnHelper.spawn("mega-logout")
-        if spawn_status == SpawnStatus.NO_ERROR:
-            if process_exit_code != 0:
-                raise MegaDownloadException(f"Logout failed with error code: {process_exit_code}\n{output}")
-        elif spawn_status == SpawnStatus.TIMEOUT:
-            raise MegaDownloadException('Logout failed due to timeout')
-        else:
-            raise MegaDownloadException('Logout failed due to unexpected error')
-
-    @staticmethod
-    def is_logged_in():
-        """
-        Check if a login to public link is active.
-
-        :return: True if logged in, False otherwise.
-        """
-        spawn_status, process_exit_code, output = SpawnHelper.spawn("mega-ls")
-        logged_in = True
-        if spawn_status == SpawnStatus.NO_ERROR:
-            if process_exit_code != 0:
-                logged_in = False
-        elif spawn_status == SpawnStatus.TIMEOUT:
-            raise MegaDownloadException('Login check failed due to timeout')
-        else:
-            raise MegaDownloadException('Login check failed due to unexpected error')
 
     @staticmethod
     def _has_extension(filename):
@@ -256,9 +256,9 @@ class MegaDownloadFolder:
             if not mega_download_paths:
                 break
             for mega_file_path in mega_download_paths:
-                self.logout()
+                MegaCmdHelper.logout()
                 self.change_ip_callback()
-                self._login()
+                MegaCmdHelper.login(self.folder_link)
                 output, status = MegaCmdHelper.mega_get(mega_file_path, self.tmp_folder, self.max_download_time)
                 if status == DownloadStatus.NO_ERROR:
                     FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)

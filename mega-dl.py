@@ -34,9 +34,9 @@ max_download_time = args.max_download_time
 force_logout = args.force_logout
 
 if force_logout:
-    MegaDownloadFolder.logout()
+    MegaCmdHelper.logout()
 
-if MegaDownloadFolder.is_logged_in():
+if MegaCmdHelper.is_logged_in():
     print("Session ongoing, aborting...")
 else:
     for link in mega_links:
