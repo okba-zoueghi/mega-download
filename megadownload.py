@@ -28,20 +28,45 @@ from enum import Enum
 from fritzbox.fritzbox import Fritzbox, RequestError
 from fileutils import FileUtils
 from changeipcallback import ChangeIpException, change_ip_address
+from spawnhelper import SpawnStatus, SpawnHelper
 
 class DownloadStatus(Enum):
     """
     Enum to represent different download statuses.
     """
     NO_ERROR = 0
-    QUOTA_EXCEEDED = 1
-    TIMEOUT_EXCEEDED = 2
-    FAILED_TO_CHANGE_IP = 3
-    OTHER_MEGA_GET_ERROR = 100
+    TIMEOUT_EXCEEDED = 1
+    DOWNLOAD_FAILED = 100
 
 class MegaDownloadException(Exception):
     def __init__(self, message):
         super().__init__(message)
+
+class MegaCmdHelper:
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def mega_get(file, target_folder, timeout):
+        status = DownloadStatus.NO_ERROR
+        command = f"mega-get {file} {target_folder}"
+        print(f'Downloading of file/link: {file} ...')
+        spawn_status, process_exit_code, output = SpawnHelper.spawn(command, timeout)
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                status = DownloadStatus.DOWNLOAD_FAILED
+                print(f'mega-get failed with error code: {process_exit_code}')
+                print(f'mega-get output:')
+                print(f'{output}')
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            status = DownloadStatus.TIMEOUT_EXCEEDED
+        else:
+            status = DownloadStatus.DOWNLOAD_FAILED
+        return (output, status)
+
+    @staticmethod
+    def is_file_link(link):
+        return (("mega.nz/file/" in link) or ("mega.nz/#!" in link))
 
 class MegaDownloadFile:
     """
@@ -71,55 +96,6 @@ class MegaDownloadFile:
         FileUtils.delete_folder(self.tmp_folder)
         print(f"####################################### MegaDownloadFile job ended at {datetime.now()} #######################################")
 
-    @staticmethod
-    def is_file_link(link):
-        return (("mega.nz/file/" in link) or ("mega.nz/#!" in link))
-
-    @staticmethod
-    def _spawn(command, timeout=30):
-        output = ''
-        failure = ''
-        timed_out = False
-        p = pexpect.spawn(command, timeout=timeout)
-        try:
-            output = p.read().decode()
-        except pexpect.TIMEOUT:
-            timed_out = True
-            failure = "Process timed out."
-            print(failure)
-        except pexpect.ExceptionPexpect as e:
-            failure = f"An error occurred: {e}"
-            print(failure)
-        except Exception as e:
-            failure = f"An unexpected error occurred: {e}"
-            print(failure)
-        p.close()
-        exit_code = p.exitstatus
-        return (exit_code, output, failure, timed_out)
-
-    def _mega_get(self, file_link):
-        """
-        Download a file from Mega.nz.
-
-        :param mega_file_path: The path of the file to download.
-        :return: A tuple containing the output and the download status.
-        """
-        status = DownloadStatus.NO_ERROR
-        command = f"mega-get {file_link} {self.tmp_folder}"
-        print(f'Download of file -- {file_link} -- is ongoing...')
-        exit_code, output, failure, timed_out = MegaDownloadFile._spawn(command, self.max_download_time)
-        if timed_out:
-            print(f"Timeout exceeded for downloading file at {datetime.now()}")
-            status = DownloadStatus.TIMEOUT_EXCEEDED
-
-        if (status == DownloadStatus.NO_ERROR) and (exit_code != 0):
-            if exit_code == 11:
-                status = DownloadStatus.QUOTA_EXCEEDED
-            else:
-                status = DownloadStatus.OTHER_MEGA_GET_ERROR
-        print('mega-get finished with status: ', status, ' and exit code: ', exit_code)
-        return (output, status)
-
     def download_file(self):
         """
         Download file.
@@ -129,7 +105,7 @@ class MegaDownloadFile:
         downloaded successfully.
         """
         self.change_ip_callback()
-        output, status = self._mega_get(self.file_link)
+        output, status = MegaCmdHelper.mega_get(self.file_link, self.tmp_folder, self.max_download_time)
         if status == DownloadStatus.NO_ERROR:
             FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
         elif status == DownloadStatus.TIMEOUT_EXCEEDED:
@@ -167,38 +143,18 @@ class MegaDownloadFolder:
         self.logout()
         print(f"####################################### MegaDownloadFolder job ended at {datetime.now()} #######################################")
 
-    @staticmethod
-    def _spawn(command, timeout=30):
-        output = ''
-        failure = ''
-        timed_out = False
-        p = pexpect.spawn(command, timeout=timeout)
-        try:
-            output = p.read().decode()
-        except pexpect.TIMEOUT:
-            timed_out = True
-            failure = "Process timed out."
-            print(failure)
-        except pexpect.ExceptionPexpect as e:
-            failure = f"An error occurred: {e}"
-            print(failure)
-        except Exception as e:
-            failure = f"An unexpected error occurred: {e}"
-            print(failure)
-        p.close()
-        exit_code = p.exitstatus
-        return (exit_code, output, failure, timed_out)
-
-
     def _login(self):
         """
         Log in to the public link.
         """
-        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn(f"mega-login {self.folder_link}")
-        if exit_code != 0:
-            error_msg = f'Login failed with exit code {exit_code}'
-            print(error_msg)
-            raise MegaDownloadException(error_msg)
+        spawn_status, process_exit_code, output = SpawnHelper.spawn(f"mega-login {self.folder_link}")
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                raise MegaDownloadException(f"Loging failed with error code: {process_exit_code}\n{output}")
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            raise MegaDownloadException('Login failed due to timeout')
+        else:
+            raise MegaDownloadException('Login failed due to unexpected error')
 
 
     @staticmethod
@@ -206,11 +162,14 @@ class MegaDownloadFolder:
         """
         Log out from public link.
         """
-        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn("mega-logout")
-        if exit_code != 0:
-            error_msg = f'Logout failed with exit code {exit_code}'
-            print(error_msg)
-            raise MegaDownloadException(error_msg)
+        spawn_status, process_exit_code, output = SpawnHelper.spawn("mega-logout")
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                raise MegaDownloadException(f"Logout failed with error code: {process_exit_code}\n{output}")
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            raise MegaDownloadException('Logout failed due to timeout')
+        else:
+            raise MegaDownloadException('Logout failed due to unexpected error')
 
     @staticmethod
     def is_logged_in():
@@ -219,36 +178,15 @@ class MegaDownloadFolder:
 
         :return: True if logged in, False otherwise.
         """
-        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn("mega-ls")
-        if exit_code == None:
-            error_msg = f'Login check failed'
-            print(error_msg)
-            raise MegaDownloadException(error_msg)
-        return (exit_code == 0)
-
-
-    def _mega_get(self, mega_file_path):
-        """
-        Download a file from Mega.nz.
-
-        :param mega_file_path: The path of the file to download.
-        :return: A tuple containing the output and the download status.
-        """
-        status = DownloadStatus.NO_ERROR
-        command = f"mega-get {mega_file_path} {self.tmp_folder}"
-        print(f'Download of file -- {mega_file_path} -- is ongoing...')
-        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn(command, self.max_download_time)
-        if timed_out:
-            print(f"Timeout exceeded for downloading file at {datetime.now()}")
-            status = DownloadStatus.TIMEOUT_EXCEEDED
-
-        if (status == DownloadStatus.NO_ERROR) and (exit_code != 0):
-            if exit_code == 11:
-                status = DownloadStatus.QUOTA_EXCEEDED
-            else:
-                status = DownloadStatus.OTHER_MEGA_GET_ERROR
-        print('mega-get finished with status: ', status, ' and exit code: ', exit_code)
-        return (output, status)
+        spawn_status, process_exit_code, output = SpawnHelper.spawn("mega-ls")
+        logged_in = True
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                logged_in = False
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            raise MegaDownloadException('Login check failed due to timeout')
+        else:
+            raise MegaDownloadException('Login check failed due to unexpected error')
 
     @staticmethod
     def _has_extension(filename):
@@ -267,11 +205,14 @@ class MegaDownloadFolder:
 
         :return: A list of tuples containing file paths and file names.
         """
-        exit_code, output, failure, timed_out = MegaDownloadFolder._spawn('mega-find *')
-        if exit_code != 0:
-            error_msg = f'Listing files failed with exit code {exit_code}'
-            print(error_msg)
-            raise MegaDownloadException(error_msg)
+        spawn_status, process_exit_code, output = SpawnHelper.spawn('mega-find *')
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                raise MegaDownloadException(f"mega-find failed with error code: {process_exit_code}\n{output}")
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            raise MegaDownloadException('mega-find failed due to timeout')
+        else:
+            raise MegaDownloadException('mega-find failed due to unexpected error')
         mega_find_output = output.strip()
         mega_file_paths_and_file_names = []
         entries = mega_find_output.split('\n')
@@ -318,7 +259,7 @@ class MegaDownloadFolder:
                 self.logout()
                 self.change_ip_callback()
                 self._login()
-                output, status = self._mega_get(mega_file_path)
+                output, status = MegaCmdHelper.mega_get(mega_file_path, self.tmp_folder, self.max_download_time)
                 if status == DownloadStatus.NO_ERROR:
                     FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
                 elif status == DownloadStatus.TIMEOUT_EXCEEDED:

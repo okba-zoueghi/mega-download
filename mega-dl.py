@@ -18,7 +18,7 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import argparse
-from megadownload import MegaDownloadFolder, MegaDownloadFile, MegaDownloadException
+from megadownload import MegaDownloadFolder, MegaDownloadFile, MegaCmdHelper, MegaDownloadException
 
 # Parse args
 parser = argparse.ArgumentParser(description='Looks for missing files in target folder and downloads them with changing the IP address before each file download')
@@ -41,7 +41,7 @@ if MegaDownloadFolder.is_logged_in():
 else:
     for link in mega_links:
         try:
-            if MegaDownloadFile.is_file_link(link):
+            if MegaCmdHelper.is_file_link(link):
                 mega_download = MegaDownloadFile(link, target_folder, max_download_time)
                 mega_download.download_file()
             else:
@@ -49,6 +49,6 @@ else:
                 mega_download.download_files()
                 del mega_download
         except MegaDownloadException as e:
-            print(f"Fatal error: {e} - aborting download from {link}")
+            print(f"Fatal error: {e}\naborting download from {link}")
         except Exception as e:
-            print(f"An unexpected error occurred: {e} - aborting download from {link}")
+            print(f"An unexpected error occurred: {e}\naborting download from {link}")
