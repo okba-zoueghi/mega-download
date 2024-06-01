@@ -18,6 +18,7 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import pexpect
+import re
 import os
 import time
 import shutil
@@ -122,7 +123,7 @@ class MegaCmdHelper:
         :return: A list of tuples containing file paths and file names.
         """
         # this command list all files exluding folders.
-        spawn_status, process_exit_code, output = SpawnHelper.spawn('mega-find --size=+0B *')
+        spawn_status, process_exit_code, output = SpawnHelper.spawn('mega-find -l --size=+0B *')
         if spawn_status == SpawnStatus.NO_ERROR:
             if process_exit_code != 0:
                 raise MegaDownloadException(f"mega-find failed with error code: {process_exit_code}\n{output}")
@@ -133,13 +134,26 @@ class MegaCmdHelper:
         mega_find_output = output.strip()
         mega_file_paths_and_file_names = []
         entries = mega_find_output.split('\n')
+        size_pattern = re.compile(r"\((\d+\.\d+) (B|KB|MB|GB)\)")
         for entry in entries:
             entry = entry.replace('\r','')
+            match = size_pattern.search(entry)
+            file_size = float(0)
+            if match:
+                file_size = float(match.group(1))
+                unit = match.group(2)
+                if unit == "GB":
+                    file_size *= 1024
+                elif unit == "KB":
+                    file_size /= 1024
+                elif unit == "B":
+                    file_size /= (1024*1024)
+            entry = entry[:match.start()].strip()
             split_entry = entry.split('/')
             download_link = os.path.join(*split_entry)
             posix_path = shlex.quote(download_link)
             file_name = split_entry[-1]
-            mega_file_paths_and_file_names.append((posix_path, file_name))
+            mega_file_paths_and_file_names.append((posix_path, file_name, file_size))
         return mega_file_paths_and_file_names
 
 class MegaDownloadFile:
@@ -225,10 +239,10 @@ class MegaDownloadFolder:
         :return: A list of mega file paths for files that are missing in the target folder.
         """
         mega_download_paths = []
-        for mega_file_path, file_name in mega_file_paths_and_file_names:
+        for mega_file_path, file_name, file_size in mega_file_paths_and_file_names:
             if not FileUtils.folder_contains_file(self.target_folder, file_name):
-                print('File missing: ', file_name)
-                mega_download_paths.append(mega_file_path)
+                print('File missing: ', file_name, f'| File size: {file_size}MB')
+                mega_download_paths.append((mega_file_path, file_size))
         if not mega_download_paths:
             print('No file is missing')
         return mega_download_paths
@@ -241,19 +255,30 @@ class MegaDownloadFolder:
         :return: If download fails the functions throws MegaDownloadException or ChangeIpException, otherwise all files are
         downloaded successfully.
         """
+        MegaCmdHelper.logout()
+        self.change_ip_callback()
+        MegaCmdHelper.login(self.folder_link)
+        downloaded_data_after_ip_change = float(0)
+        total_downloaded_data = float(0)
         mega_file_paths_and_file_names = MegaCmdHelper.list_all_files()
         while True:
             mega_download_paths = self._get_mega_download_paths_of_missing_files(mega_file_paths_and_file_names)
             if not mega_download_paths:
                 break
-            for mega_file_path in mega_download_paths:
-                MegaCmdHelper.logout()
-                self.change_ip_callback()
-                MegaCmdHelper.login(self.folder_link)
+            for mega_file_path, file_size in mega_download_paths:
+                print('Downloaded data after ip address change: ', downloaded_data_after_ip_change)
+                if (downloaded_data_after_ip_change + file_size) >= 4500:
+                    MegaCmdHelper.logout()
+                    self.change_ip_callback()
+                    MegaCmdHelper.login(self.folder_link)
+                    downloaded_data_after_ip_change = 0
                 output, status = MegaCmdHelper.mega_get(mega_file_path, self.tmp_folder, self.max_download_time)
                 if status == DownloadStatus.NO_ERROR:
+                    total_downloaded_data += file_size
+                    print(f'Total downloaded data: {}')
                     FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
                 elif status == DownloadStatus.TIMEOUT_EXCEEDED:
                     FileUtils.remove_mega_tmp_files(self.tmp_folder)
                 else:
                     raise MegaDownloadException(f"{datetime.now()} Unexpected mega-get error encountered during downloading {mega_file_path}")
+                downloaded_data_after_ip_change += file_size
