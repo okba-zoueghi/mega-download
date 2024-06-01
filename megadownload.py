@@ -90,14 +90,15 @@ class MegaCmdHelper:
         :return: True if logged in, False otherwise.
         """
         spawn_status, process_exit_code, output = SpawnHelper.spawn("mega-ls")
-        logged_in = True
+        is_logged_in = True
         if spawn_status == SpawnStatus.NO_ERROR:
             if process_exit_code != 0:
-                logged_in = False
+                is_logged_in = False
         elif spawn_status == SpawnStatus.TIMEOUT:
             raise MegaDownloadException('Login check failed due to timeout')
         else:
             raise MegaDownloadException('Login check failed due to unexpected error')
+        return is_logged_in
 
     @staticmethod
     def login(folder_link):
@@ -112,6 +113,34 @@ class MegaCmdHelper:
             raise MegaDownloadException('Login failed due to timeout')
         else:
             raise MegaDownloadException('Login failed due to unexpected error')
+
+    @staticmethod
+    def list_all_files():
+        """
+        Retrieve the file paths and file names from the public link.
+
+        :return: A list of tuples containing file paths and file names.
+        """
+        # this command list all files exluding folders.
+        spawn_status, process_exit_code, output = SpawnHelper.spawn('mega-find --size=+0B *')
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                raise MegaDownloadException(f"mega-find failed with error code: {process_exit_code}\n{output}")
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            raise MegaDownloadException('mega-find failed due to timeout')
+        else:
+            raise MegaDownloadException('mega-find failed due to unexpected error')
+        mega_find_output = output.strip()
+        mega_file_paths_and_file_names = []
+        entries = mega_find_output.split('\n')
+        for entry in entries:
+            entry = entry.replace('\r','')
+            split_entry = entry.split('/')
+            download_link = os.path.join(*split_entry)
+            posix_path = shlex.quote(download_link)
+            file_name = split_entry[-1]
+            mega_file_paths_and_file_names.append((posix_path, file_name))
+        return mega_file_paths_and_file_names
 
 class MegaDownloadFile:
     """
@@ -188,44 +217,6 @@ class MegaDownloadFolder:
         MegaCmdHelper.logout()
         print(f"####################################### MegaDownloadFolder job ended at {datetime.now()} #######################################")
 
-    @staticmethod
-    def _has_extension(filename):
-        """
-        Check if the filename has an extension.
-
-        :param filename: The name of the file to check.
-        :return: True if the file has an extension, False otherwise.
-        """
-        parts = filename.rsplit('.', 1)
-        return len(parts) == 2 and len(parts[1]) > 0
-
-    def _get_mega_file_path_and_file_name(self):
-        """
-        Retrieve the file paths and file names from the public link.
-
-        :return: A list of tuples containing file paths and file names.
-        """
-        spawn_status, process_exit_code, output = SpawnHelper.spawn('mega-find *')
-        if spawn_status == SpawnStatus.NO_ERROR:
-            if process_exit_code != 0:
-                raise MegaDownloadException(f"mega-find failed with error code: {process_exit_code}\n{output}")
-        elif spawn_status == SpawnStatus.TIMEOUT:
-            raise MegaDownloadException('mega-find failed due to timeout')
-        else:
-            raise MegaDownloadException('mega-find failed due to unexpected error')
-        mega_find_output = output.strip()
-        mega_file_paths_and_file_names = []
-        entries = mega_find_output.split('\n')
-        for entry in entries:
-            entry = entry.replace('\r','')
-            if self._has_extension(entry):
-                split_entry = entry.split('/')
-                download_link = os.path.join(*split_entry)
-                posix_path = shlex.quote(download_link)
-                file_name = split_entry[-1]
-                mega_file_paths_and_file_names.append((posix_path, file_name))
-        return mega_file_paths_and_file_names
-
     def _get_mega_download_paths_of_missing_files(self, mega_file_paths_and_file_names):
         """
         Get the download paths of missing files.
@@ -250,7 +241,7 @@ class MegaDownloadFolder:
         :return: If download fails the functions throws MegaDownloadException or ChangeIpException, otherwise all files are
         downloaded successfully.
         """
-        mega_file_paths_and_file_names = self._get_mega_file_path_and_file_name()
+        mega_file_paths_and_file_names = MegaCmdHelper.list_all_files()
         while True:
             mega_download_paths = self._get_mega_download_paths_of_missing_files(mega_file_paths_and_file_names)
             if not mega_download_paths:
