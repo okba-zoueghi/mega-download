@@ -244,7 +244,7 @@ class MegaDownloadFolder:
             else:
                 print(color_text(f'File already exists: {file_name} (Size: {file_size} MB)', 'GREEN'))
         if not mega_download_paths:
-            print(color_text('No file is missing', GREEN))
+            print(color_text('No file is missing', 'GREEN'))
         return mega_download_paths
 
     def download_files(self):

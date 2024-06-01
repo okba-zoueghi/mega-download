@@ -13,11 +13,13 @@ Clone:
 git clone --recurse-submodules https://github.com/okba-zoueghi/mega-download.git
 ```
 
-The CLI uses mega-cmd, therefore mega-cmd shall be available.
+The CLI uses MEGAcmd, therefore mega-cmd shall be available.
 
-For installing mega-cmd, refer to https://github.com/meganz/MEGAcmd
+For installing MEGAcmd, refer to https://github.com/meganz/MEGAcmd
 
-Tested with MEGAcmd version: 1.5.1.1 on Rpi 4 running Debian (For Rpi, deb file can be found in https://mega.nz/linux/repo/Raspbian_9.0/armhf/)
+Tested with MEGAcmd versions: 1.5.1.1 | 1.6.3.1
+
+Tested on Rpi 4 running Debian (MEGAcmd deb files can be found in https://mega.nz/linux/repo/)
 
 Install python dependencies:
 
