@@ -280,5 +280,4 @@ class MegaDownloadFolder:
                     FileUtils.remove_mega_tmp_files(self.tmp_folder)
                     print(color_text(f"{datetime.now()} Unexpected mega-get error encountered during downloading {mega_file_path}", 'RED'))
                 downloaded_data_since_ip_change += file_size
-        print(download_status)
         return download_status
