@@ -30,6 +30,9 @@ from fritzbox.fritzbox import Fritzbox, RequestError
 from fileutils import FileUtils
 from changeipcallback import ChangeIpException, change_ip_address
 from spawnhelper import SpawnStatus, SpawnHelper
+from colortext import color_text
+
+DATA_THRESHOLD = 4500.0
 
 class DownloadStatus(Enum):
     """
@@ -56,9 +59,8 @@ class MegaCmdHelper:
         if spawn_status == SpawnStatus.NO_ERROR:
             if process_exit_code != 0:
                 status = DownloadStatus.DOWNLOAD_FAILED
-                print(f'mega-get failed with error code: {process_exit_code}')
-                print(f'mega-get output:')
-                print(f'{output}')
+                print(color_text(f'mega-get failed with error code: {process_exit_code}', 'RED'))
+                print(color_text(f"mega-get output:\n[{output}]", 'RED'))
         elif spawn_status == SpawnStatus.TIMEOUT:
             status = DownloadStatus.TIMEOUT_EXCEEDED
         else:
@@ -120,7 +122,7 @@ class MegaCmdHelper:
         """
         Retrieve the file paths and file names from the public link.
 
-        :return: A list of tuples containing file paths and file names.
+        :return: A list of tuples containing file path, file name and file size.
         """
         # this command list all files exluding folders.
         spawn_status, process_exit_code, output = SpawnHelper.spawn('mega-find -l --size=+0B *')
@@ -171,16 +173,16 @@ class MegaDownloadFile:
         :change_ip_callback: Callback function for changing ip address.
         """
         print(f"####################################### MegaDownloadFile job ended at {datetime.now()} #######################################")
+        self.tmp_folder = FileUtils.create_tmp_folder()
+        if not FileUtils.does_folder_exist(target_folder):
+            raise MegaDownloadException(f'Target folder: {target_folder} does not exist')
         self.file_link = file_link
         self.target_folder = target_folder
         self.max_download_time = max_download_time
-        self.tmp_folder = FileUtils.create_tmp_folder()
         self.change_ip_callback = change_ip_callback
+        MegaCmdHelper.logout()
 
     def __del__(self):
-        """
-        Destructor to handle cleanup operations.
-        """
         FileUtils.delete_folder(self.tmp_folder)
         print(f"####################################### MegaDownloadFile job ended at {datetime.now()} #######################################")
 
@@ -189,22 +191,24 @@ class MegaDownloadFile:
         Download file.
         The IP address is changed before the download to avoid exceeding the mega download quota.
 
-        :return: If download fails the functions throws MegaDownloadException or ChangeIpException, otherwise the file is
-        downloaded successfully.
+        :return: Download status. An exception is thrown is case of fatal error.
         """
         self.change_ip_callback()
         output, status = MegaCmdHelper.mega_get(self.file_link, self.tmp_folder, self.max_download_time)
         if status == DownloadStatus.NO_ERROR:
             FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
+            print(color_text(f'{self.file_link} is downloaded successfully', 'GREEN'))
         elif status == DownloadStatus.TIMEOUT_EXCEEDED:
-            raise MegaDownloadException(f"{datetime.now()} Timeout exceeded during downloading {self.file_link}")
+            FileUtils.remove_mega_tmp_files(self.tmp_folder)
+            print(color_text(f"{datetime.now()} Timeout exceeded during downloading {self.file_link}", 'RED'))
         else:
-            raise MegaDownloadException(f"{datetime.now()} Unexpected mega-get error encountered during downloading {self.file_link}")
+            FileUtils.remove_mega_tmp_files(self.tmp_folder)
+            print(color_text(f"{datetime.now()} Unexpected mega-get error encountered during downloading {self.file_link}", 'RED'))
+        return status
 
 class MegaDownloadFolder:
     """
     Class to handle downloading files from Mega.nz folder using public links without quoata restrictions.
-    This is achieved through changing the IP address before starting each file download.
     """
     def __init__(self, folder_link, target_folder, max_download_time, change_ip_callback = change_ip_address):
         """
@@ -216,69 +220,65 @@ class MegaDownloadFolder:
         :change_ip_callback: Callback function for changing ip address.
         """
         print(f"####################################### MegaDownloadFolder job started at {datetime.now()} #######################################")
+        self.tmp_folder = FileUtils.create_tmp_folder()
+        if not FileUtils.does_folder_exist(target_folder):
+            raise MegaDownloadException(f'Target folder: {target_folder} does not exist')
         self.folder_link = folder_link
         self.target_folder = target_folder
         self.max_download_time = max_download_time
-        self.tmp_folder = FileUtils.create_tmp_folder()
         self.change_ip_callback = change_ip_callback
+        MegaCmdHelper.logout()
         MegaCmdHelper.login(self.folder_link)
 
     def __del__(self):
-        """
-        Destructor to handle cleanup operations.
-        """
         FileUtils.delete_folder(self.tmp_folder)
-        MegaCmdHelper.logout()
         print(f"####################################### MegaDownloadFolder job ended at {datetime.now()} #######################################")
 
     def _get_mega_download_paths_of_missing_files(self, mega_file_paths_and_file_names):
-        """
-        Get the download paths of missing files.
-
-        :param mega_file_paths_and_file_names: List of tuples containing file paths and file names.
-        :return: A list of mega file paths for files that are missing in the target folder.
-        """
         mega_download_paths = []
         for mega_file_path, file_name, file_size in mega_file_paths_and_file_names:
             if not FileUtils.folder_contains_file(self.target_folder, file_name):
-                print('File missing: ', file_name, f'| File size: {file_size}MB')
+                print(color_text(f'File missing: {file_name} (Size: {file_size} MB)', 'YELLOW'))
                 mega_download_paths.append((mega_file_path, file_size))
+            else:
+                print(color_text(f'File already exists: {file_name} (Size: {file_size} MB)', 'GREEN'))
         if not mega_download_paths:
-            print('No file is missing')
+            print(color_text('No file is missing', GREEN))
         return mega_download_paths
 
     def download_files(self):
         """
         Download missing files.
-        The IP address is changed before every download to avoid exceeding the mega download quota.
+        The IP address is changed initially and then each time the downloaded data reaches DATA_THRESHOLD
 
-        :return: If download fails the functions throws MegaDownloadException or ChangeIpException, otherwise all files are
-        downloaded successfully.
+        :return: list of files and their download status. An exception is thrown is case of fatal error.
         """
-        MegaCmdHelper.logout()
-        self.change_ip_callback()
-        MegaCmdHelper.login(self.folder_link)
-        downloaded_data_after_ip_change = float(0)
-        total_downloaded_data = float(0)
+        download_status = []
+        downloaded_data_since_ip_change = DATA_THRESHOLD
+        total_downloaded_data = 0.0
         mega_file_paths_and_file_names = MegaCmdHelper.list_all_files()
-        while True:
-            mega_download_paths = self._get_mega_download_paths_of_missing_files(mega_file_paths_and_file_names)
-            if not mega_download_paths:
-                break
+        mega_download_paths = self._get_mega_download_paths_of_missing_files(mega_file_paths_and_file_names)
+        if mega_download_paths:
             for mega_file_path, file_size in mega_download_paths:
-                print('Downloaded data after ip address change: ', downloaded_data_after_ip_change)
-                if (downloaded_data_after_ip_change + file_size) >= 4500:
+                if (downloaded_data_since_ip_change + file_size) >= DATA_THRESHOLD:
                     MegaCmdHelper.logout()
                     self.change_ip_callback()
                     MegaCmdHelper.login(self.folder_link)
-                    downloaded_data_after_ip_change = 0
+                    downloaded_data_since_ip_change = 0
+                print(color_text(f'Downloaded data since last IP address change: {downloaded_data_since_ip_change} MB', 'YELLOW'))
                 output, status = MegaCmdHelper.mega_get(mega_file_path, self.tmp_folder, self.max_download_time)
+                download_status.append((mega_file_path, status))
                 if status == DownloadStatus.NO_ERROR:
                     total_downloaded_data += file_size
-                    print(f'Total downloaded data: {}')
                     FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
+                    print(color_text(f'{mega_file_path} is downloaded successfully', 'GREEN'))
+                    print(color_text(f'Total downloaded data: {total_downloaded_data} MB', 'GREEN'))
                 elif status == DownloadStatus.TIMEOUT_EXCEEDED:
                     FileUtils.remove_mega_tmp_files(self.tmp_folder)
+                    print(color_text(f"{datetime.now()} Timeout exceeded during downloading {mega_file_path}", 'RED'))
                 else:
-                    raise MegaDownloadException(f"{datetime.now()} Unexpected mega-get error encountered during downloading {mega_file_path}")
-                downloaded_data_after_ip_change += file_size
+                    FileUtils.remove_mega_tmp_files(self.tmp_folder)
+                    print(color_text(f"{datetime.now()} Unexpected mega-get error encountered during downloading {mega_file_path}", 'RED'))
+                downloaded_data_since_ip_change += file_size
+        print(download_status)
+        return download_status

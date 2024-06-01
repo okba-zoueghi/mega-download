@@ -19,6 +19,7 @@
 
 import argparse
 from megadownload import MegaDownloadFolder, MegaDownloadFile, MegaCmdHelper, MegaDownloadException
+from colortext import color_text
 
 # Parse args
 parser = argparse.ArgumentParser(description='Looks for missing files in target folder and downloads them with changing the IP address before each file download')
@@ -37,7 +38,8 @@ if force_logout:
     MegaCmdHelper.logout()
 
 if MegaCmdHelper.is_logged_in():
-    print("Session ongoing, aborting...")
+    print(color_text("Session ongoing, aborting...", 'RED'))
+    print(color_text("Use the option --force-logout to force logging out", 'RED'))
 else:
     for link in mega_links:
         try:
@@ -49,6 +51,6 @@ else:
                 mega_download.download_files()
                 del mega_download
         except MegaDownloadException as e:
-            print(f"Fatal error: {e}\naborting download from {link}")
+            print(color_text(f"Fatal error: [{e}]\naborting download from {link}", 'RED'))
         except Exception as e:
-            print(f"An unexpected error occurred: {e}\naborting download from {link}")
+            print(color_text(f"An unexpected error occurred: [{e}]\naborting download from {link}", 'RED'))
