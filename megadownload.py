@@ -231,6 +231,7 @@ class MegaDownloadFolder:
         MegaCmdHelper.login(self.folder_link)
 
     def __del__(self):
+        MegaCmdHelper.logout()
         FileUtils.delete_folder(self.tmp_folder)
         print(f"####################################### MegaDownloadFolder job ended at {datetime.now()} #######################################")
 
