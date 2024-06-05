@@ -7,6 +7,8 @@ Download of files of size greater than 5GB is also supported.
 
 The same CLI could be used with another router. To do that you shall update the callback function ```change_ip_address()``` in the file ```changeipcallback.py``` to change the ip address of your router.
 
+Using a free mega account can be frustrating since the download is limited to 5GB. A pro mega account allows to download more data but it requires a monthly subscription and also is limited. Since I download too often files from mega, I created this repo to bypass restrictions of free accounts. I made the repo public since this might be useful for other people.
+
 ## Clone and Install Dependencies
 
 Clone:
@@ -56,3 +58,10 @@ The command will fetch the given links and check for missing files in the target
 ```shell
 mega-dl.py --link '<link1>' --link '<link2>' --link '<link3>' --target-folder '<path to target folder>' --force-logout
 ```
+
+### Want to Contribute?
+
+You're welcome to create a pull request :)
+
+### Like the repo and want to say thanks?
+This repo is developed totally in my free time. If you like it and want to say thanks, you can support me through [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/okba.zoueghi) or https://www.paypal.com/paypalme/okbazoueghi.
