@@ -49,9 +49,6 @@ optional arguments:
   -f, --force-logout    Force mega logout
 ```
 
-Note:
-Missing files are checked only in folder links (not supported for single file links).
-Download of large files (> 5GB) is currently only supported from folder links (not supported for single file links)
 ### Example:
 
 The '--link' option can be used one or multiple times to downloads files from several links.
@@ -60,6 +57,16 @@ The command will fetch the given links and check for missing files in the target
 ```shell
 mega-dl.py --link '<link1>' --link '<link2>' --link '<link3>' --target-folder '<path to target folder>' --force-logout
 ```
+
+### Limitations
+
+Missing files are checked only in folder links (not supported for single file links). File name and size it not logged for single file links (no MEGAcmd command allows to get file names from single file links).
+
+Download of large files (> 5GB) is currently only supported from folder links (not supported for single file links)
+
+No parallel download is supported i.e. only one instance of the scripts can run at once. This due to the underlying MEGAcmd commands (e.g. ```mega-login```). For example, a login to a public folder link is necessary to download from a public link and only one login session is possible at the same time.
+
+
 
 ### Want to Contribute?
 
