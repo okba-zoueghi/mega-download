@@ -49,7 +49,9 @@ optional arguments:
   -f, --force-logout    Force mega logout
 ```
 
-Note: missing files are checked only for links containing folders (not supported for single file links)
+Note:
+Missing files are checked only in folder links (not supported for single file links).
+Download of large files (> 5GB) is currently only supported from folder links (not supported for single file links)
 ### Example:
 
 The '--link' option can be used one or multiple times to downloads files from several links.
