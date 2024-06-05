@@ -3,6 +3,8 @@
 CLI implemented in python that allows downloading files from a Mega.nz public link to a target folder (only missing files are downloaded) without quota restriction.
 Bypassing the quota is achieved by changing the IP address each time 4500 MB of data is downloaded.
 
+Download of files of size greater than 5GB is also supported.
+
 The same CLI could be used with another router. To do that you shall update the callback function ```change_ip_address()``` in the file ```changeipcallback.py``` to change the ip address of your router.
 
 ## Clone and Install Dependencies
@@ -45,6 +47,7 @@ optional arguments:
   -f, --force-logout    Force mega logout
 ```
 
+Note: missing files are checked only for links containing folders (not supported for single file links)
 ### Example:
 
 The '--link' option can be used one or multiple times to downloads files from several links.

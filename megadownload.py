@@ -142,6 +142,99 @@ class MegaCmdHelper:
             raise MegaDownloadException('Starting mega-cmd-server failed due to unexpected error')
 
     @staticmethod
+    def parse_mega_transfers_output(output):
+        download_infos = []
+        valid_states = "QUEUED|ACTIVE|PAUSED|RETRYING|COMPLETING|COMPLETED|CANCELLED|FAILED"
+        entries = output.strip().replace('\r','').split('\n')
+        start_index = 0
+        if (len(entries) > 1):
+            for i in range(0, len(entries)):
+                if '|||' in entries[i]:
+                    start_index = i
+                    break
+            col_name = entries[start_index].split('|||')
+            if (len(col_name) == 3) and (col_name[0] == 'DESTINYPATH') and (col_name[1] == 'STATE') and (col_name[2] == 'PROGRESS'):
+                for entry in entries[(start_index+1):]:
+                    download_info = entry.split('|||')
+                    if (len(download_info) == 3) and (download_info[1] in valid_states):
+                        download_infos.append((download_info[0], download_info[1], download_info[2]))
+        return download_infos
+
+    @staticmethod
+    def download_large_file(mega_file_path, filename, target_folder, change_ip_callback):
+        download_status = DownloadStatus.DOWNLOAD_FAILED
+        mega_get_command = f"mega-get -q {mega_file_path} {target_folder}"
+        spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_get_command)
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                print(color_text(f"{datetime.now()} Command '{mega_get_command}' failed with exit code {process_exit_code}\noutput: {output}", 'RED'))
+
+        if (spawn_status == SpawnStatus.NO_ERROR) and (process_exit_code == 0):
+            print(f'Downloading of large file: {mega_file_path} ...')
+            time.sleep(5)
+            while True:
+                mega_transfers_command = f"mega-transfers --col-separator='|||' --output-cols=DESTINYPATH,STATE,PROGRESS"
+                spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_transfers_command)
+                if spawn_status == SpawnStatus.NO_ERROR:
+                    if process_exit_code != 0:
+                        print(color_text(f"{datetime.now()} Command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}", 'RED'))
+                        break
+                    else:
+                        download_infos = MegaCmdHelper.parse_mega_transfers_output(output)
+                        if download_infos:
+                            for file_destination, state, progress in download_infos:
+                                if filename in file_destination:
+                                    if state == 'RETRYING':
+                                        MegaCmdHelper.kill_mega_cmd_server()
+                                        print(color_text(f"{datetime.now()} Quota exceeded, killed mega-cmd-server and changing IP address", 'YELLOW'))
+                                        change_ip_callback()
+                                        print(color_text(f"{datetime.now()} Starting the mega-cmd-server...", 'YELLOW'))
+                                        MegaCmdHelper.start_mega_cmd_server()
+                                        time.sleep(5)
+                                    else:
+                                        print(f'Download state: {state} (Progress: {progress})')
+                                    break
+
+                        # empty output --> no download is active --> download might be completed
+                        elif output.replace('\r','').replace('\n','') == '':
+                            time.sleep(5)
+                            print(color_text(f'Checking download status', 'YELLOW'))
+                            mega_transfers_command = f"mega-transfers --col-separator='|||' --output-cols=DESTINYPATH,STATE,PROGRESS --show-completed"
+                            spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_transfers_command)
+                            if spawn_status == SpawnStatus.NO_ERROR:
+                                if process_exit_code != 0:
+                                    print(color_text(f"{datetime.now()} Command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}", 'RED'))
+                                    break
+                                else:
+                                    completing_download = False
+                                    download_infos = MegaCmdHelper.parse_mega_transfers_output(output)
+                                    for file_destination, state, progress in download_infos:
+                                        if filename in file_destination:
+                                            if state == "COMPLETED":
+                                                download_status = DownloadStatus.NO_ERROR
+                                                break
+                                            elif state == "COMPLETING":
+                                                print(color_text(f"{datetime.now()} Quota exceeded, killed mega-cmd-server and changing IP address", 'YELLOW'))
+                                                completing_download = True
+                                                break
+                                            else:
+                                                print(color_text(f"{datetime.now()} Unxpect download state encountered '{state}'", 'YELLOW'))
+                                    if not completing_download:
+                                        break
+                        else:
+                            print(color_text(f"{datetime.now()} Unexpected mega-transfers output: [{output}]", 'RED'))
+                            break
+                        time.sleep(60)
+                elif spawn_status == SpawnStatus.TIMEOUT:
+                    print(color_text(f"{datetime.now()} Timeout exceeded during running command '{mega_transfers_command}'", 'RED'))
+                    break
+                else:
+                    print(color_text(f"{datetime.now()} Unexpected error running command '{mega_transfers_command}'", 'RED'))
+                    break
+
+        return download_status
+
+    @staticmethod
     def list_all_files():
         """
         Retrieve the file paths and file names from the public link.
@@ -271,98 +364,6 @@ class MegaDownloadFolder:
             print(color_text('No file is missing', 'GREEN'))
         return mega_download_paths
 
-    @staticmethod
-    def parse_mega_transfers_output(output):
-        download_infos = []
-        valid_states = "QUEUED|ACTIVE|PAUSED|RETRYING|COMPLETING|COMPLETED|CANCELLED|FAILED"
-        entries = output.strip().replace('\r','').split('\n')
-        start_index = 0
-        if (len(entries) > 1):
-            for i in range(0, len(entries)):
-                if '|||' in entries[i]:
-                    start_index = i
-                    break
-            col_name = entries[start_index].split('|||')
-            if (len(col_name) == 3) and (col_name[0] == 'DESTINYPATH') and (col_name[1] == 'STATE') and (col_name[2] == 'PROGRESS'):
-                for entry in entries[(start_index+1):]:
-                    download_info = entry.split('|||')
-                    if (len(download_info) == 3) and (download_info[1] in valid_states):
-                        download_infos.append((download_info[0], download_info[1], download_info[2]))
-        return download_infos
-
-    def download_large_file(self, mega_file_path, filename):
-        download_status = DownloadStatus.DOWNLOAD_FAILED
-        mega_get_command = f"mega-get -q {mega_file_path} {self.tmp_folder}"
-        spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_get_command)
-        if spawn_status == SpawnStatus.NO_ERROR:
-            if process_exit_code != 0:
-                print(color_text(f"{datetime.now()} Command '{mega_get_command}' failed with exit code {process_exit_code}\noutput: {output}", 'RED'))
-
-        if (spawn_status == SpawnStatus.NO_ERROR) and (process_exit_code == 0):
-            print(f'Downloading of large file: {mega_file_path} ...')
-            time.sleep(5)
-            while True:
-                mega_transfers_command = f"mega-transfers --col-separator='|||' --output-cols=DESTINYPATH,STATE,PROGRESS"
-                spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_transfers_command)
-                if spawn_status == SpawnStatus.NO_ERROR:
-                    if process_exit_code != 0:
-                        print(color_text(f"{datetime.now()} Command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}", 'RED'))
-                        break
-                    else:
-                        download_infos = MegaDownloadFolder.parse_mega_transfers_output(output)
-                        if download_infos:
-                            for file_destination, state, progress in download_infos:
-                                if filename in file_destination:
-                                    if state == 'RETRYING':
-                                        MegaCmdHelper.kill_mega_cmd_server()
-                                        print(color_text(f"{datetime.now()} Quota exceeded, killed mega-cmd-server and changing IP address", 'YELLOW'))
-                                        self.change_ip_callback()
-                                        print(color_text(f"{datetime.now()} Starting the mega-cmd-server...", 'YELLOW'))
-                                        MegaCmdHelper.start_mega_cmd_server()
-                                        time.sleep(5)
-                                    else:
-                                        print(f'Download state: {state} (Progress: {progress})')
-                                    break
-
-                        # empty output --> no download is active --> download might be completed
-                        elif output.replace('\r','').replace('\n','') == '':
-                            time.sleep(5)
-                            print(color_text(f'Checking download status', 'YELLOW'))
-                            mega_transfers_command = f"mega-transfers --col-separator='|||' --output-cols=DESTINYPATH,STATE,PROGRESS --show-completed"
-                            spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_transfers_command)
-                            if spawn_status == SpawnStatus.NO_ERROR:
-                                if process_exit_code != 0:
-                                    print(color_text(f"{datetime.now()} Command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}", 'RED'))
-                                    break
-                                else:
-                                    completing_download = False
-                                    download_infos = MegaDownloadFolder.parse_mega_transfers_output(output)
-                                    for file_destination, state, progress in download_infos:
-                                        if filename in file_destination:
-                                            if state == "COMPLETED":
-                                                download_status = DownloadStatus.NO_ERROR
-                                                break
-                                            elif state == "COMPLETING":
-                                                print(color_text(f"{datetime.now()} Quota exceeded, killed mega-cmd-server and changing IP address", 'YELLOW'))
-                                                completing_download = distributed
-                                                break
-                                            else:
-                                                print(color_text(f"{datetime.now()} Unxpect download state encountered '{state}'", 'YELLOW'))
-                                    if not completing_download:
-                                        break
-                        else:
-                            print(color_text(f"{datetime.now()} Unexpected mega-transfers output: [{output}]", 'RED'))
-                            break
-                        time.sleep(60)
-                elif spawn_status == SpawnStatus.TIMEOUT:
-                    print(color_text(f"{datetime.now()} Timeout exceeded during running command '{mega_transfers_command}'", 'RED'))
-                    break
-                else:
-                    print(color_text(f"{datetime.now()} Unexpected error running command '{mega_transfers_command}'", 'RED'))
-                    break
-
-        return download_status
-
     def download_files(self):
         """
         Download missing files.
@@ -378,7 +379,7 @@ class MegaDownloadFolder:
         if mega_download_paths:
             for mega_file_path, filename, file_size in mega_download_paths:
                 if file_size > DATA_THRESHOLD:
-                    status = self.download_large_file(mega_file_path, filename)
+                    status = self.download_large_file(mega_file_path, filename, self.tmp_folder, self.change_ip_callback)
                     download_status.append((mega_file_path, status))
                     if status == DownloadStatus.NO_ERROR:
                         total_downloaded_data += file_size
