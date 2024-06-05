@@ -379,7 +379,7 @@ class MegaDownloadFolder:
         if mega_download_paths:
             for mega_file_path, filename, file_size in mega_download_paths:
                 if file_size > DATA_THRESHOLD:
-                    status = self.download_large_file(mega_file_path, filename, self.tmp_folder, self.change_ip_callback)
+                    status = MegaCmdHelper.download_large_file(mega_file_path, filename, self.tmp_folder, self.change_ip_callback)
                     download_status.append((mega_file_path, status))
                     if status == DownloadStatus.NO_ERROR:
                         total_downloaded_data += file_size
