@@ -37,3 +37,8 @@ def color_text(text, color):
     color_code = COLORS[color.upper()]
     # Return the colored text
     return f"{color_code}{text}{COLORS['RESET']}"
+
+def print_progress_bar(percentage, length=50):
+    filled_length = int(length * percentage // 100)
+    bar = '█' * filled_length + '-' * (length - filled_length)
+    print(f'\r|{bar}| {percentage:.1f}% Complete', end='')
