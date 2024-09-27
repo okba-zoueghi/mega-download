@@ -1,11 +1,17 @@
-# Mega.nz Unlimited Download [works only with a fritzbox router]
+# Mega.nz Unlimited Download
 
 CLI implemented in python that allows downloading files from a Mega.nz public link to a target folder (only missing files are downloaded) without quota restriction.
 Bypassing the quota is achieved by changing the IP address each time 4500 MB of data is downloaded.
 
 Download of files of size greater than 5GB is also supported.
 
-The same CLI could be used with another router. To do that you shall update the callback function ```change_ip_address()``` in the file ```changeipcallback.py``` to change the ip address of your router.
+The following router families are supported:
+- Fritzbox
+- Glinet
+
+The same CLI could be used with other routers. To do that you need to set the callback function ```change_ip_address``` in the file ```changeipcallback.py``` to a function that changes the ip address of your router.
+
+By default the callback is set to change the ip assuming that the router is a Glinet router. If a fritzbox is used, the callback function needs to be changed in ```changeipcallback.py```.
 
 Using a free mega account can be frustrating since the download is limited to 5GB. A pro mega account allows to download more data but it requires a monthly subscription and also is limited. Since I download too often files from mega, I created this repo to bypass restrictions of free accounts. I made the repo public since this might be useful for other people.
 
@@ -66,6 +72,9 @@ Download of large files (> 5GB) is currently only supported from folder links (n
 
 No parallel download is supported i.e. only one instance of the scripts can run at once. This due to the underlying MEGAcmd commands (e.g. ```mega-login```). For example, a login to a public folder link is necessary to download from a public link and only one login session is possible at the same time.
 
+In case you use a fritzbox, it might be the case that you ip doesn't change, this depends on the your ISP.
+
+In case you use a Glinet router, a VPN subscription is required (tested only with Mullvad).
 
 
 ### Want to Contribute?

@@ -68,7 +68,8 @@ def change_ip_address_glinet():
 
 """
 This function is used as a callback to change the IP address in the class MegaDownload.
-Update the implementation this function to change the ip address of your router.
+If you use a fritzbox set the function to point to the fritzbox function i.e. change_ip_address = change_ip_address_fritzbox
+If required, set the callback to point to a function that changes the ip address of your router.
 The function shall block until the ip address is changed.
 If the function fails to change the ip address, the exception ChangeIpException shall be raised.
 """
