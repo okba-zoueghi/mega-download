@@ -260,8 +260,8 @@ class MegaCmdHelper:
                                         print(color_text(f"{datetime.now()} Starting the mega-cmd-server...", 'YELLOW'))
                                         MegaCmdHelper.start_mega_cmd_server()
                                         time.sleep(5)
-                                    else:
-                                        print(f'Download state: {state} (Progress: {progress})')
+                                    # else:
+                                    #     print(f'Download state: {state} (Progress: {progress})')
                                     break
 
                         # empty output --> no download is active --> download might be completed
@@ -283,7 +283,7 @@ class MegaCmdHelper:
                                                 download_status = DownloadStatus.NO_ERROR
                                                 break
                                             elif state == "COMPLETING":
-                                                print(color_text(f"{datetime.now()} Quota exceeded, killed mega-cmd-server and changing IP address", 'YELLOW'))
+                                                print(color_text(f"{datetime.now()} Download is being completed", 'YELLOW'))
                                                 completing_download = True
                                                 break
                                             else:
@@ -358,7 +358,7 @@ class MegaDownloadFile:
         :param max_download_time: Maximum time allowed for the download of a single file in seconds.
         :change_ip_callback: Callback function for changing ip address.
         """
-        print(f"####################################### MegaDownloadFile job ended at {datetime.now()} #######################################")
+        print(f"####################################### MegaDownloadFile job started at {datetime.now()} #######################################")
         self.tmp_folder = FileUtils.create_tmp_folder()
         if not FileUtils.does_folder_exist(target_folder):
             raise MegaDownloadException(f'Target folder: {target_folder} does not exist')
@@ -381,12 +381,17 @@ class MegaDownloadFile:
         """
         status = DownloadStatus.DOWNLOAD_FAILED
         file_name, file_size = MegaCmdHelper.get_file_info_from_link(self.file_link)
-        print(color_text(f'File link {self.file_link} contains file: {file_name} ({file_size})', 'YELLOW'))
+        print(color_text(f'File link contains file: {file_name} ({file_size} MB)', 'YELLOW'))
         self.change_ip_callback()
+        thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(0,))
+        thread.start()
         output, status = MegaCmdHelper.mega_get(self.file_link, self.tmp_folder, self.max_download_time)
+        thread.join()
         if status == DownloadStatus.NO_ERROR:
+            print(color_text(f'{file_name} is downloaded successfully', 'GREEN'))
+            print(color_text(f'Moving file ({file_name}) to destination ({self.target_folder}) ...', 'YELLOW'))
             FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
-            print(color_text(f'{self.file_link} is downloaded successfully', 'GREEN'))
+            print(color_text(f'{file_name} is moved to destination', 'GREEN'))
         elif status == DownloadStatus.TIMEOUT_EXCEEDED:
             FileUtils.remove_mega_tmp_files(self.tmp_folder)
             print(color_text(f"{datetime.now()} Timeout exceeded during downloading {self.file_link}", 'RED'))
@@ -451,12 +456,17 @@ class MegaDownloadFolder:
         if mega_download_paths:
             for mega_file_path, filename, file_size in mega_download_paths:
                 if file_size > DATA_THRESHOLD:
+                    thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(0,))
+                    thread.start()
                     status = MegaCmdHelper.download_large_file(mega_file_path, filename, self.tmp_folder, self.change_ip_callback)
+                    thread.join()
                     download_status.append((mega_file_path, status))
                     if status == DownloadStatus.NO_ERROR:
                         total_downloaded_data += file_size
+                        print(color_text(f'{filename} is downloaded successfully', 'GREEN'))
+                        print(color_text(f'Moving file ({filename}) to destination ({self.target_folder}) ...', 'YELLOW'))
                         FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
-                        print(color_text(f'{mega_file_path} is downloaded successfully', 'GREEN'))
+                        print(color_text(f'{filename} is moved to destination', 'GREEN'))
                         print(color_text(f'Total downloaded data: {total_downloaded_data} MB', 'GREEN'))
                     else:
                         FileUtils.remove_mega_tmp_files(self.tmp_folder)
@@ -479,8 +489,10 @@ class MegaDownloadFolder:
                     download_status.append((mega_file_path, status))
                     if status == DownloadStatus.NO_ERROR:
                         total_downloaded_data += file_size
+                        print(color_text(f'{filename} is downloaded successfully', 'GREEN'))
+                        print(color_text(f'Moving file ({filename}) to destination ({self.target_folder}) ...', 'YELLOW'))
                         FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
-                        print(color_text(f'{mega_file_path} is downloaded successfully', 'GREEN'))
+                        print(color_text(f'{filename} is moved to destination', 'GREEN'))
                         print(color_text(f'Total downloaded data: {total_downloaded_data} MB', 'GREEN'))
                     elif status == DownloadStatus.TIMEOUT_EXCEEDED:
                         FileUtils.remove_mega_tmp_files(self.tmp_folder)
