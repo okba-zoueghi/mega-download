@@ -66,8 +66,6 @@ mega-dl.py --link '<link1>' --link '<link2>' --link '<link3>' --target-folder '<
 
 ### Limitations
 
-Missing files are checked only in folder links (not supported for single file links). File name and size it not logged for single file links (no MEGAcmd command allows to get file names from single file links).
-
 Download of large files (> 5GB) is currently only supported from folder links (not supported for single file links)
 
 No parallel download is supported i.e. only one instance of the scripts can run at once. This due to the underlying MEGAcmd commands (e.g. ```mega-login```). For example, a login to a public folder link is necessary to download from a public link and only one login session is possible at the same time.
