@@ -385,10 +385,14 @@ class MegaDownloadFile:
         self.change_ip_callback()
         thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(0,))
         thread.start()
+        start_time = time.time()
         output, status = MegaCmdHelper.mega_get(self.file_link, self.tmp_folder, self.max_download_time)
+        end_time = time.time()
+        download_time_in_seconds = end_time - start_time
+        download_speed = int((file_size / download_time_in_seconds) * 8)
         thread.join()
         if status == DownloadStatus.NO_ERROR:
-            print(color_text(f'{file_name} is downloaded successfully', 'GREEN'))
+            print(color_text(f'{file_name} is downloaded successfully in {round(download_time_in_seconds / 60, 1)} mins (average download speed: {download_speed} Mbps)', 'GREEN'))
             print(color_text(f'Moving file ({file_name}) to destination ({self.target_folder}) ...', 'YELLOW'))
             FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
             print(color_text(f'{file_name} is moved to destination', 'GREEN'))
@@ -484,12 +488,16 @@ class MegaDownloadFolder:
                     print(color_text(f'Downloaded data since last IP address change: {downloaded_data_since_ip_change} MB', 'YELLOW'))
                     thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(0,))
                     thread.start()
+                    start_time = time.time()
                     output, status = MegaCmdHelper.mega_get(mega_file_path, self.tmp_folder, self.max_download_time)
+                    end_time = time.time()
+                    download_time_in_seconds = end_time - start_time
+                    download_speed = int((file_size / download_time_in_seconds) * 8)
                     thread.join()
                     download_status.append((mega_file_path, status))
                     if status == DownloadStatus.NO_ERROR:
                         total_downloaded_data += file_size
-                        print(color_text(f'{filename} is downloaded successfully', 'GREEN'))
+                        print(color_text(f'{filename} is downloaded successfully in {round(download_time_in_seconds / 60, 1)} mins (average download speed: {download_speed} Mbps)', 'GREEN'))
                         print(color_text(f'Moving file ({filename}) to destination ({self.target_folder}) ...', 'YELLOW'))
                         FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
                         print(color_text(f'{filename} is moved to destination', 'GREEN'))
