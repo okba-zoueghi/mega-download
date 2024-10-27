@@ -187,7 +187,7 @@ class MegaCmdHelper:
         return file_name, file_size
 
     @staticmethod
-    def print_progress(period):
+    def print_progress(period, download_start_time, file_size):
         time.sleep(10)
         while True:
             mega_transfers_command = f"mega-transfers --col-separator='|||' --output-cols=DESTINYPATH,STATE,PROGRESS"
@@ -205,7 +205,11 @@ class MegaCmdHelper:
             match = re.search(pattern, download_info[0][2])
             if match:
                 progress = float(match.group(1))
-                print_progress_bar(progress)
+                downloaded_data = round(((progress * file_size) / 100), 1)
+                current_time = time.time()
+                download_time_in_seconds = current_time - download_start_time
+                average_download_speed = int((file_size / download_time_in_seconds) * 8)
+                print_progress_bar(progress, downloaded_data, average_download_speed)
             else:
                 raise MegaDownloadException(f"Print progress failed")
             time.sleep(period)
@@ -383,7 +387,7 @@ class MegaDownloadFile:
         file_name, file_size = MegaCmdHelper.get_file_info_from_link(self.file_link)
         print(color_text(f'File link contains file: {file_name} ({file_size} MB)', 'YELLOW'))
         self.change_ip_callback()
-        thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(0,))
+        thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(1,time.time(),file_size,))
         thread.start()
         start_time = time.time()
         output, status = MegaCmdHelper.mega_get(self.file_link, self.tmp_folder, self.max_download_time)
@@ -460,7 +464,7 @@ class MegaDownloadFolder:
         if mega_download_paths:
             for mega_file_path, filename, file_size in mega_download_paths:
                 if file_size > DATA_THRESHOLD:
-                    thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(0,))
+                    thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(1,time.time(),file_size,))
                     thread.start()
                     status = MegaCmdHelper.download_large_file(mega_file_path, filename, self.tmp_folder, self.change_ip_callback)
                     thread.join()
@@ -486,7 +490,7 @@ class MegaDownloadFolder:
                         MegaCmdHelper.login(self.folder_link)
                         downloaded_data_since_ip_change = 0
                     print(color_text(f'Downloaded data since last IP address change: {downloaded_data_since_ip_change} MB', 'YELLOW'))
-                    thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(0,))
+                    thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(1,time.time(),file_size,))
                     thread.start()
                     start_time = time.time()
                     output, status = MegaCmdHelper.mega_get(mega_file_path, self.tmp_folder, self.max_download_time)

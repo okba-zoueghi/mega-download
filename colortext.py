@@ -38,7 +38,7 @@ def color_text(text, color):
     # Return the colored text
     return f"{color_code}{text}{COLORS['RESET']}"
 
-def print_progress_bar(percentage, length=50):
+def print_progress_bar(percentage, downloaded_data, average_download_speed, length=50):
     filled_length = int(length * percentage // 100)
     bar = '█' * filled_length + '-' * (length - filled_length)
-    print(f'\r|{bar}| {percentage:.1f}% Complete', end='')
+    print(f'\r|{bar}| {percentage:.1f}% Complete (Downloaded data: {downloaded_data} MB | Average download speed: {average_download_speed} Mbps)', end='')
