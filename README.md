@@ -9,10 +9,6 @@ The following router families are supported:
 - Fritzbox
 - Glinet
 
-The same CLI could be used with other routers. To do that you need to set the callback function ```change_ip_address``` in the file ```changeipcallback.py``` to a function that changes the ip address of your router.
-
-By default the callback is set to change the ip assuming that the router is a Glinet router. If a fritzbox is used, the callback function needs to be changed in ```changeipcallback.py```.
-
 Using a free mega account can be frustrating since the download is limited to 5GB. A pro mega account allows to download more data but it requires a monthly subscription and also is limited. Since I download too often files from mega, I created this repo to bypass restrictions of free accounts. I made the repo public since this might be useful for other people.
 
 ## Clone and Install Dependencies

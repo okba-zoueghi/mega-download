@@ -29,7 +29,7 @@ import shlex
 from enum import Enum
 from fritzbox.fritzbox import Fritzbox, RequestError
 from fileutils import FileUtils
-from changeipcallback import ChangeIpException, change_ip_address
+from changeipcallback import ChangeIpException, get_ip_changer
 from spawnhelper import SpawnStatus, SpawnHelper
 from colortext import color_text, print_progress_bar
 
@@ -234,7 +234,7 @@ class MegaCmdHelper:
         return download_infos
 
     @staticmethod
-    def download_large_file(mega_file_path, filename, target_folder, change_ip_callback):
+    def download_large_file(mega_file_path, filename, target_folder, ip_changer):
         download_status = DownloadStatus.DOWNLOAD_FAILED
         mega_get_command = f"mega-get -q {mega_file_path} {target_folder}"
         spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_get_command)
@@ -260,7 +260,7 @@ class MegaCmdHelper:
                                     if state == 'RETRYING':
                                         MegaCmdHelper.kill_mega_cmd_server()
                                         print(color_text(f"{datetime.now()} Quota exceeded, killed mega-cmd-server and changing IP address", 'YELLOW'))
-                                        change_ip_callback()
+                                        ip_changer.change_ip()
                                         print(color_text(f"{datetime.now()} Starting the mega-cmd-server...", 'YELLOW'))
                                         MegaCmdHelper.start_mega_cmd_server()
                                         time.sleep(5)
@@ -353,14 +353,13 @@ class MegaDownloadFile:
     Class to handle downloading a file from Mega.nz public link without quoata restrictions.
     This is achieved through changing the IP address before starting the file download.
     """
-    def __init__(self, file_link, target_folder, max_download_time, change_ip_callback = change_ip_address):
+    def __init__(self, file_link, target_folder, max_download_time):
         """
         Initialize the MegaDownloadFolder instance.
 
         :param file_link: The public Mega.nz file link to download from.
         :param target_folder: The folder to download the files to.
         :param max_download_time: Maximum time allowed for the download of a single file in seconds.
-        :change_ip_callback: Callback function for changing ip address.
         """
         print(f"####################################### MegaDownloadFile job started at {datetime.now()} #######################################")
         self.tmp_folder = FileUtils.create_tmp_folder()
@@ -369,7 +368,6 @@ class MegaDownloadFile:
         self.file_link = file_link
         self.target_folder = target_folder
         self.max_download_time = max_download_time
-        self.change_ip_callback = change_ip_callback
         MegaCmdHelper.logout()
 
     def __del__(self):
@@ -386,7 +384,8 @@ class MegaDownloadFile:
         status = DownloadStatus.DOWNLOAD_FAILED
         file_name, file_size = MegaCmdHelper.get_file_info_from_link(self.file_link)
         print(color_text(f'File link contains file: {file_name} ({file_size} MB)', 'YELLOW'))
-        self.change_ip_callback()
+        ip_changer = get_ip_changer()
+        ip_changer.change_ip()
         thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(1,time.time(),file_size,))
         thread.start()
         start_time = time.time()
@@ -412,14 +411,13 @@ class MegaDownloadFolder:
     """
     Class to handle downloading files from Mega.nz folder using public links without quoata restrictions.
     """
-    def __init__(self, folder_link, target_folder, max_download_time, change_ip_callback = change_ip_address):
+    def __init__(self, folder_link, target_folder, max_download_time):
         """
         Initialize the MegaDownloadFolder instance.
 
         :param folder_link: The public Mega.nz folder link to download from.
         :param target_folder: The folder to download the files to.
         :param max_download_time: Maximum time allowed for the download of a single file in seconds.
-        :change_ip_callback: Callback function for changing ip address.
         """
         print(f"####################################### MegaDownloadFolder job started at {datetime.now()} #######################################")
         self.tmp_folder = FileUtils.create_tmp_folder()
@@ -428,7 +426,6 @@ class MegaDownloadFolder:
         self.folder_link = folder_link
         self.target_folder = target_folder
         self.max_download_time = max_download_time
-        self.change_ip_callback = change_ip_callback
         MegaCmdHelper.logout()
         MegaCmdHelper.login(self.folder_link)
 
@@ -461,12 +458,13 @@ class MegaDownloadFolder:
         total_downloaded_data = 0.0
         mega_file_paths_and_file_names = MegaCmdHelper.list_all_files()
         mega_download_paths = self._get_mega_download_paths_of_missing_files(mega_file_paths_and_file_names)
+        ip_changer = get_ip_changer()
         if mega_download_paths:
             for mega_file_path, filename, file_size in mega_download_paths:
                 if file_size > DATA_THRESHOLD:
                     thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(1,time.time(),file_size,))
                     thread.start()
-                    status = MegaCmdHelper.download_large_file(mega_file_path, filename, self.tmp_folder, self.change_ip_callback)
+                    status = MegaCmdHelper.download_large_file(mega_file_path, filename, self.tmp_folder, ip_changer)
                     thread.join()
                     download_status.append((mega_file_path, status))
                     if status == DownloadStatus.NO_ERROR:
@@ -480,13 +478,13 @@ class MegaDownloadFolder:
                         FileUtils.remove_mega_tmp_files(self.tmp_folder)
                         print(color_text(f"{datetime.now()} Unexpected error encountered during downloading large file{mega_file_path}", 'RED'))
                     MegaCmdHelper.logout()
-                    self.change_ip_callback()
+                    ip_changer.change_ip()
                     MegaCmdHelper.login(self.folder_link)
                     downloaded_data_since_ip_change = 0
                 else:
                     if (downloaded_data_since_ip_change + file_size) >= DATA_THRESHOLD:
                         MegaCmdHelper.logout()
-                        self.change_ip_callback()
+                        ip_changer.change_ip()
                         MegaCmdHelper.login(self.folder_link)
                         downloaded_data_since_ip_change = 0
                     print(color_text(f'Downloaded data since last IP address change: {downloaded_data_since_ip_change} MB', 'YELLOW'))
