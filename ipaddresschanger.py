@@ -55,9 +55,6 @@ class IpChangerFritzbox:
             raise ChangeIpException(f'Failed to change ip with error: {change_ip_error_code}')
         print('New IP: ', self.fritzbox.get_public_ip())
 
-    def cleanup(self):
-        pass
-
 class IpChangerGlinet:
     def __init__(self, glinet_password, vpn_provider):
         self.password = glinet_password
