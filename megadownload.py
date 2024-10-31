@@ -29,7 +29,7 @@ import shlex
 from enum import Enum
 from fritzbox.fritzbox import Fritzbox, RequestError
 from fileutils import FileUtils
-from changeipcallback import ChangeIpException, get_ip_changer
+from ipaddresschanger import ChangeIpException, get_ip_changer
 from spawnhelper import SpawnStatus, SpawnHelper
 from colortext import color_text, print_progress_bar
 
