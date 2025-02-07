@@ -17,8 +17,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import pexpect
 from enum import Enum
+
+import pexpect
+
 
 class SpawnStatus(Enum):
     NO_ERROR = 0
@@ -31,18 +33,18 @@ class SpawnHelper:
         pass
 
     @staticmethod
-    def spawn(command,timeout=30):
+    def spawn(command, timeout=30):
         spawn_status = SpawnStatus.NO_ERROR
-        output = ''
+        output = ""
         p = pexpect.spawn(command, timeout=timeout)
         try:
             output = p.read().decode()
         except pexpect.TIMEOUT as e:
             spawn_status = SpawnStatus.TIMEOUT
-            print(f'Spawn failed due to timeout: {e}')
+            print(f"Spawn failed due to timeout: {e}")
         except Exception as e:
             spawn_status = SpawnStatus.UNEXPECTED_ERROR
-            print(f'Spawn failed: {e}')
+            print(f"Spawn failed: {e}")
         p.close()
         process_exit_code = p.exitstatus
         return (spawn_status, process_exit_code, output)
