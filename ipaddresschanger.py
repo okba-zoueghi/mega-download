@@ -21,7 +21,7 @@ import logging
 import random
 import time
 from fritzbox.fritzbox import Fritzbox, RequestError
-from glinet.pyglinet.glinet import GlInet
+from pyglinet.glinet import GlInet
 
 """
 Possible value are 'Fritzbox' or 'GlInet'
