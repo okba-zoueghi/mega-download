@@ -17,12 +17,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import random
-import tempfile
 import os
+import random
 import shutil
 import string
+import tempfile
 from datetime import datetime
+
 
 class FileUtils:
     def __init__(self):
@@ -37,7 +38,9 @@ class FileUtils:
 
     @staticmethod
     def create_tmp_folder():
-        tmp_folder_name = ''.join(random.choices(string.ascii_lowercase + string.digits, k=20))
+        tmp_folder_name = "".join(
+            random.choices(string.ascii_lowercase + string.digits, k=20)
+        )
         tmp_dir = tempfile.gettempdir()
         tmp_folder_path = os.path.join(tmp_dir, tmp_folder_name)
         os.mkdir(tmp_folder_path)
@@ -46,7 +49,7 @@ class FileUtils:
     @staticmethod
     def remove_mega_tmp_files(folder_path):
         for filename in os.listdir(folder_path):
-            if filename.startswith('.'):
+            if filename.startswith("."):
                 file_path = os.path.join(folder_path, filename)
                 os.remove(file_path)
 

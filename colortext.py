@@ -17,6 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+
 def color_text(text, color):
     # ANSI escape codes for colors
     COLORS = {
@@ -28,7 +29,7 @@ def color_text(text, color):
         "MAGENTA": "\033[95m",
         "CYAN": "\033[96m",
         "WHITE": "\033[97m",
-        "RESET": "\033[0m"
+        "RESET": "\033[0m",
     }
     # Check if the color is supported
     if color.upper() not in COLORS:
@@ -38,7 +39,11 @@ def color_text(text, color):
     # Return the colored text
     return f"{color_code}{text}{COLORS['RESET']}"
 
+
 def print_progress_bar(percentage, downloaded_data, average_download_speed, length=50):
     filled_length = int(length * percentage // 100)
-    bar = '█' * filled_length + '-' * (length - filled_length)
-    print(f'\r|{bar}| {percentage:.1f}% Complete (Downloaded data: {downloaded_data} MB | Average download speed: {average_download_speed} Mbps)', end='')
+    bar = "█" * filled_length + "-" * (length - filled_length)
+    print(
+        f"\r|{bar}| {percentage:.1f}% Complete (Downloaded data: {downloaded_data} MB | Average download speed: {average_download_speed} Mbps)",
+        end="",
+    )

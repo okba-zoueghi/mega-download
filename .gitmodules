@@ -1,7 +1,3 @@
 [submodule "fritzbox"]
 	path = fritzbox
 	url = https://github.com/okba-zoueghi/fritzbox
-[submodule "glinet"]
-	path = glinet
-	url = https://github.com/tomtana/python-glinet
-	branch = add_fallback_api_ressource
