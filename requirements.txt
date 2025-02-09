@@ -1,4 +1,4 @@
-git+https://github.com/tomtana/python-glinet.git@c7fb6f3d2c7055dea35a24817fef7329a7f4017b
+git+https://github.com/okba-zoueghi/python-glinet.git@c7fb6f3d2c7055dea35a24817fef7329a7f4017b
 pexpect==4.9.0
 Requests==2.31.0
 black==24.3.0
