@@ -21,9 +21,12 @@ git clone --recurse-submodules https://github.com/okba-zoueghi/mega-download.git
 
 The CLI uses MEGAcmd, therefore mega-cmd shall be available.
 
-For installing MEGAcmd, refer to https://github.com/meganz/MEGAcmd
+For installing MEGAcmd, refer to https://mega.io/cmd#download and https://github.com/meganz/MEGAcmd
 
-Tested with MEGAcmd versions: 1.5.1.1 | 1.6.3.1
+Tested with MEGAcmd versions:
+- 1.5.1.1
+- 1.6.3.1
+- 1.7.0.6
 
 Tested on Rpi 4 running Debian (MEGAcmd deb files can be found in https://mega.nz/linux/repo/)
 
@@ -31,6 +34,8 @@ Install python dependencies:
 
 ```shell
 cd mega-download
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
