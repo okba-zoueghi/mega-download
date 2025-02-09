@@ -42,15 +42,19 @@ pip install -r requirements.txt
 ## Usage
 
 ```
-usage: mega-dl.py [-h] -l LINK -t TARGET_FOLDER [-m MAX_DOWNLOAD_TIME] [-f]
+usage: mega-dl.py [-h] -r ROUTER [-p PASSWORD] -l LINK -t TARGET_FOLDER [-m MAX_DOWNLOAD_TIME] [-f]
 
 Looks for missing files in target folder and downloads them with changing the IP address before each file download
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
+  -r ROUTER, --router ROUTER
+                        Router to be used, can be [glinet|fritzbox]
+  -p PASSWORD, --password PASSWORD
+                        Password of the glinet router (only needed in case a glinet router is used)
   -l LINK, --link LINK  mega public link
   -t TARGET_FOLDER, --target-folder TARGET_FOLDER
-                        Target folder to store successfully downloaded files
+                        Target folder absolute path to store successfully downloaded files
   -m MAX_DOWNLOAD_TIME, --max-download-time MAX_DOWNLOAD_TIME
                         Max download time for a single file in seconds
   -f, --force-logout    Force mega logout
@@ -62,7 +66,7 @@ The '--link' option can be used one or multiple times to downloads files from se
 The command will fetch the given links and check for missing files in the target folder and download them.
 
 ```shell
-mega-dl.py --link '<link1>' --link '<link2>' --link '<link3>' --target-folder '<path to target folder>' --force-logout
+mega-dl.py --router 'glinet' --password yourpassword --link '<link1>' --link '<link2>' --link '<link3>' --target-folder '<path to target folder>' --force-logout
 ```
 
 ### Limitations

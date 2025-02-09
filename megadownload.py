@@ -32,7 +32,7 @@ import pexpect
 from colortext import color_text, print_progress_bar
 from fileutils import FileUtils
 from fritzbox.fritzbox import Fritzbox, RequestError
-from ipaddresschanger import ChangeIpException, get_ip_changer
+from ipaddresschanger import ChangeIpException, IpChangerHelper
 from spawnhelper import SpawnHelper, SpawnStatus
 
 DATA_THRESHOLD = 4500.0
@@ -517,7 +517,7 @@ class MegaDownloadFile:
                 f"File link contains file: {file_name} ({file_size} MB)", "YELLOW"
             )
         )
-        ip_changer = get_ip_changer()
+        ip_changer = IpChangerHelper.get_ip_changer()
         ip_changer.change_ip()
         thread = threading.Thread(
             target=MegaCmdHelper.print_progress,
@@ -639,7 +639,7 @@ class MegaDownloadFolder:
         mega_download_paths = self._get_mega_download_paths_of_missing_files(
             mega_file_paths_and_file_names
         )
-        ip_changer = get_ip_changer()
+        ip_changer = IpChangerHelper.get_ip_changer()
         if mega_download_paths:
             for mega_file_path, filename, file_size in mega_download_paths:
                 if file_size > DATA_THRESHOLD:

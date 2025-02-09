@@ -25,23 +25,6 @@ from pyglinet.glinet import GlInet
 
 from fritzbox.fritzbox import Fritzbox, RequestError
 
-"""
-Possible value are 'Fritzbox' or 'GlInet'
-If left empty or set to another value, by default GlInet will used
-"""
-ROUTER = "GlInet"
-
-"""
-GlInet router password
-"""
-GLINET_PASSWORD = "your router password"
-
-"""
-Name of VPN provider for glinet router
-"""
-VPN_PROVIDER = "Mullvad"
-
-
 class ChangeIpException(Exception):
     def __init__(self, message):
         super().__init__(message)
@@ -111,8 +94,26 @@ class IpChangerGlinet:
         )
         glinet.logout()
 
+class IpChangerHelper:
+    router = None
+    password = None
+    vpn_provider = None
 
-def get_ip_changer():
-    if ROUTER == "Fritzbox":
-        return IpChangerFritzbox()
-    return IpChangerGlinet(GLINET_PASSWORD, VPN_PROVIDER)
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def set_router(router):
+        IpChangerHelper.router = router
+
+    @staticmethod
+    def set_glinet_config(password,vpn_provider):
+        IpChangerHelper.password = password
+        IpChangerHelper.vpn_provider = vpn_provider
+
+    @staticmethod
+    def get_ip_changer():
+        if IpChangerHelper.router == 'fritzbox':
+            return IpChangerFritzbox()
+        elif IpChangerHelper.router == 'glinet':
+            return IpChangerGlinet(IpChangerHelper.password, IpChangerHelper.vpn_provider)
