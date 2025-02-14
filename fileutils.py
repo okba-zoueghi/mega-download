@@ -67,6 +67,7 @@ class FileUtils:
                 source_file_path = os.path.join(root, file_name)
                 destination_file_path = os.path.join(destination_folder, file_name)
                 shutil.move(source_file_path, destination_file_path)
+                os.chmod(destination_file_path, 0o666)
 
     @staticmethod
     def delete_folder(folder_path):
