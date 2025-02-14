@@ -7,7 +7,7 @@ Download of files of size greater than 5GB is also supported.
 
 The following router families are supported:
 - Fritzbox
-- Glinet
+- Glinet (Only Mullvad VPN is currently supported, without a Mullvad subscription changing the IP is not possible)
 
 Using a free mega account can be frustrating since the download is limited to 5GB. A pro mega account allows to download more data but it requires a monthly subscription and also is limited. Since I download too often files from mega, I created this repo to bypass restrictions of free accounts. I made the repo public since this might be useful for other people.
 
