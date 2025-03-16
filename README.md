@@ -1,7 +1,7 @@
 # Mega.nz Unlimited Download
 
 CLI implemented in python that allows downloading files from a Mega.nz public link to a target folder (only missing files are downloaded) without quota restriction.
-Bypassing the quota is achieved by changing the IP address each time 4500 MB of data is downloaded.
+Bypassing the quota is achieved by changing the IP address each time the quota is exceeded.
 
 Download of files of size greater than 5GB is also supported.
 

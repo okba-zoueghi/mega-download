@@ -35,9 +35,6 @@ from fritzbox.fritzbox import Fritzbox, RequestError
 from ipaddresschanger import ChangeIpException, IpChangerHelper
 from spawnhelper import SpawnHelper, SpawnStatus
 
-DATA_THRESHOLD = 4500.0
-
-
 class DownloadStatus(Enum):
     """
     Enum to represent different download statuses.
@@ -228,15 +225,16 @@ class MegaCmdHelper:
     def print_progress(period, download_start_time, file_size):
         time.sleep(10)
         while True:
-            mega_transfers_command = f"mega-transfers --col-separator='|||' --output-cols=DESTINYPATH,STATE,PROGRESS"
-            spawn_status, process_exit_code, output = SpawnHelper.spawn(
-                mega_transfers_command
-            )
+            check_mega_cmd_command = f"pgrep -l mega-cmd-server"
+            spawn_status, process_exit_code, output = SpawnHelper.spawn(check_mega_cmd_command)
             if spawn_status == SpawnStatus.NO_ERROR:
                 if process_exit_code != 0:
-                    raise MegaDownloadException(
-                        f"Print progress failed, command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}"
-                    )
+                    continue
+            mega_transfers_command = f"mega-transfers --col-separator='|||' --output-cols=DESTINYPATH,STATE,PROGRESS"
+            spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_transfers_command)
+            if spawn_status == SpawnStatus.NO_ERROR:
+                if process_exit_code != 0:
+                    raise MegaDownloadException(f"Print progress failed, command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}")
             else:
                 raise MegaDownloadException(f"Print progress failed")
             download_info = MegaCmdHelper.parse_mega_transfers_output(output)
@@ -285,62 +283,37 @@ class MegaCmdHelper:
         return download_infos
 
     @staticmethod
-    def download_large_file(mega_file_path, filename, target_folder, ip_changer):
+    def download_file_from_folder(mega_file_path, filename, target_folder, ip_changer):
         download_status = DownloadStatus.DOWNLOAD_FAILED
         mega_get_command = f"mega-get -q {mega_file_path} {target_folder}"
         spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_get_command)
         if spawn_status == SpawnStatus.NO_ERROR:
             if process_exit_code != 0:
-                print(
-                    color_text(
-                        f"{datetime.now()} Command '{mega_get_command}' failed with exit code {process_exit_code}\noutput: {output}",
-                        "RED",
-                    )
-                )
+                print(color_text(f"{datetime.now()} Command '{mega_get_command}' failed with exit code {process_exit_code}\noutput: {output}","RED"))
 
         if (spawn_status == SpawnStatus.NO_ERROR) and (process_exit_code == 0):
             print(f"Downloading of large file: {filename} ...")
             time.sleep(5)
             while True:
                 mega_transfers_command = f"mega-transfers --col-separator='|||' --output-cols=DESTINYPATH,STATE,PROGRESS"
-                spawn_status, process_exit_code, output = SpawnHelper.spawn(
-                    mega_transfers_command
-                )
+                spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_transfers_command)
                 if spawn_status == SpawnStatus.NO_ERROR:
                     if process_exit_code != 0:
-                        print(
-                            color_text(
-                                f"{datetime.now()} Command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}",
-                                "RED",
-                            )
-                        )
+                        print(color_text(f"{datetime.now()} Command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}","RED"))
                         break
                     else:
-                        download_infos = MegaCmdHelper.parse_mega_transfers_output(
-                            output
-                        )
+                        download_infos = MegaCmdHelper.parse_mega_transfers_output(output)
                         if download_infos:
                             for file_destination, state, progress in download_infos:
                                 if filename in file_destination:
                                     if state == "RETRYING":
                                         MegaCmdHelper.kill_mega_cmd_server()
-                                        print(
-                                            color_text(
-                                                f"{datetime.now()} Quota exceeded, killed mega-cmd-server and changing IP address",
-                                                "YELLOW",
-                                            )
-                                        )
+                                        print(color_text(f"{datetime.now()} Quota exceeded, killed mega-cmd-server and changing IP address","RED"))
                                         ip_changer.change_ip()
-                                        print(
-                                            color_text(
-                                                f"{datetime.now()} Starting the mega-cmd-server...",
-                                                "YELLOW",
-                                            )
+                                        print(color_text(f"{datetime.now()} Starting the mega-cmd-server...", "RED")
                                         )
                                         MegaCmdHelper.start_mega_cmd_server()
                                         time.sleep(5)
-                                    # else:
-                                    #     print(f'Download state: {state} (Progress: {progress})')
                                     break
 
                         # empty output --> no download is active --> download might be completed
@@ -348,78 +321,36 @@ class MegaCmdHelper:
                             time.sleep(5)
                             print(color_text(f"Checking download status", "YELLOW"))
                             mega_transfers_command = f"mega-transfers --col-separator='|||' --output-cols=DESTINYPATH,STATE,PROGRESS --show-completed"
-                            spawn_status, process_exit_code, output = SpawnHelper.spawn(
-                                mega_transfers_command
-                            )
+                            spawn_status, process_exit_code, output = SpawnHelper.spawn(mega_transfers_command)
                             if spawn_status == SpawnStatus.NO_ERROR:
                                 if process_exit_code != 0:
-                                    print(
-                                        color_text(
-                                            f"{datetime.now()} Command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}",
-                                            "RED",
-                                        )
-                                    )
+                                    print(color_text(f"{datetime.now()} Command '{mega_transfers_command}' failed with exit code {process_exit_code}\noutput: {output}", "RED"))
                                     break
                                 else:
                                     completing_download = False
-                                    download_infos = (
-                                        MegaCmdHelper.parse_mega_transfers_output(
-                                            output
-                                        )
-                                    )
-                                    for (
-                                        file_destination,
-                                        state,
-                                        progress,
-                                    ) in download_infos:
+                                    download_infos = MegaCmdHelper.parse_mega_transfers_output(output)
+                                    for (file_destination, state, progress) in download_infos:
                                         if filename in file_destination:
                                             if state == "COMPLETED":
-                                                download_status = (
-                                                    DownloadStatus.NO_ERROR
-                                                )
+                                                download_status = DownloadStatus.NO_ERROR
                                                 break
                                             elif state == "COMPLETING":
-                                                print(
-                                                    color_text(
-                                                        f"{datetime.now()} Download is being completed",
-                                                        "YELLOW",
-                                                    )
-                                                )
+                                                print(color_text(f"{datetime.now()} Download is being completed", "YELLOW"))
                                                 completing_download = True
                                                 break
                                             else:
-                                                print(
-                                                    color_text(
-                                                        f"{datetime.now()} Unxpect download state encountered '{state}'",
-                                                        "YELLOW",
-                                                    )
-                                                )
+                                                print(color_text(f"{datetime.now()} Unxpect download state encountered '{state}'", "YELLOW"))
                                     if not completing_download:
                                         break
                         else:
-                            print(
-                                color_text(
-                                    f"{datetime.now()} Unexpected mega-transfers output: [{output}]",
-                                    "RED",
-                                )
-                            )
+                            print(color_text(f"{datetime.now()} Unexpected mega-transfers output: [{output}]", "RED"))
                             break
-                        time.sleep(20)
+                        time.sleep(1)
                 elif spawn_status == SpawnStatus.TIMEOUT:
-                    print(
-                        color_text(
-                            f"{datetime.now()} Timeout exceeded during running command '{mega_transfers_command}'",
-                            "RED",
-                        )
-                    )
+                    print(color_text(f"{datetime.now()} Timeout exceeded during running command '{mega_transfers_command}'", "RED"))
                     break
                 else:
-                    print(
-                        color_text(
-                            f"{datetime.now()} Unexpected error running command '{mega_transfers_command}'",
-                            "RED",
-                        )
-                    )
+                    print(color_text(f"{datetime.now()} Unexpected error running command '{mega_transfers_command}'", "RED"))
                     break
 
         return download_status
@@ -628,143 +559,33 @@ class MegaDownloadFolder:
     def download_files(self):
         """
         Download missing files.
-        The IP address is changed initially and then each time the downloaded data reaches DATA_THRESHOLD
 
         :return: list of files and their download status. An exception is thrown is case of fatal error.
         """
         download_status = []
-        downloaded_data_since_ip_change = DATA_THRESHOLD
         total_downloaded_data = 0.0
         mega_file_paths_and_file_names = MegaCmdHelper.list_all_files()
-        mega_download_paths = self._get_mega_download_paths_of_missing_files(
-            mega_file_paths_and_file_names
-        )
+        mega_download_paths = self._get_mega_download_paths_of_missing_files(mega_file_paths_and_file_names)
         ip_changer = IpChangerHelper.get_ip_changer()
         if mega_download_paths:
             for mega_file_path, filename, file_size in mega_download_paths:
-                if file_size > DATA_THRESHOLD:
-                    thread = threading.Thread(
-                        target=MegaCmdHelper.print_progress,
-                        args=(
-                            1,
-                            time.time(),
-                            file_size,
-                        ),
-                    )
-                    thread.start()
-                    status = MegaCmdHelper.download_large_file(
-                        mega_file_path, filename, self.tmp_folder, ip_changer
-                    )
-                    thread.join()
-                    download_status.append((mega_file_path, status))
-                    if status == DownloadStatus.NO_ERROR:
-                        total_downloaded_data += file_size
-                        print(
-                            color_text(
-                                f"{filename} is downloaded successfully", "GREEN"
-                            )
-                        )
-                        print(
-                            color_text(
-                                f"Moving file ({filename}) to destination ({self.target_folder}) ...",
-                                "YELLOW",
-                            )
-                        )
-                        FileUtils.move_files_to_destination(
-                            self.tmp_folder, self.target_folder
-                        )
-                        print(
-                            color_text(f"{filename} is moved to destination", "GREEN")
-                        )
-                        print(
-                            color_text(
-                                f"Total downloaded data: {total_downloaded_data} MB",
-                                "GREEN",
-                            )
-                        )
-                    else:
-                        FileUtils.remove_mega_tmp_files(self.tmp_folder)
-                        print(
-                            color_text(
-                                f"{datetime.now()} Unexpected error encountered during downloading large file{mega_file_path}",
-                                "RED",
-                            )
-                        )
-                    MegaCmdHelper.logout()
-                    ip_changer.change_ip()
-                    MegaCmdHelper.login(self.folder_link)
-                    downloaded_data_since_ip_change = 0
+                thread = threading.Thread(target=MegaCmdHelper.print_progress, args=(1, time.time(), file_size,),)
+                thread.start()
+                start_time = time.time()
+                status = MegaCmdHelper.download_file_from_folder(mega_file_path, filename, self.tmp_folder, ip_changer)
+                thread.join()
+                end_time = time.time()
+                download_time_in_seconds = end_time - start_time
+                download_speed = int((file_size / download_time_in_seconds) * 8)
+                download_status.append((mega_file_path, status))
+                if status == DownloadStatus.NO_ERROR:
+                    total_downloaded_data += file_size
+                    print(color_text(f"{filename} is downloaded successfully in {round(download_time_in_seconds / 60, 1)} mins (average download speed: {download_speed} Mbps)", "GREEN"))
+                    print(color_text(f"Moving file ({filename}) to destination ({self.target_folder}) ...", "WHITE"))
+                    FileUtils.move_files_to_destination(self.tmp_folder, self.target_folder)
+                    print(color_text(f"{filename} is moved to destination", "GREEN"))
+                    print(color_text(f"Total downloaded data: {total_downloaded_data} MB", "CYAN"))
                 else:
-                    if (downloaded_data_since_ip_change + file_size) >= DATA_THRESHOLD:
-                        MegaCmdHelper.logout()
-                        ip_changer.change_ip()
-                        MegaCmdHelper.login(self.folder_link)
-                        downloaded_data_since_ip_change = 0
-                    print(
-                        color_text(
-                            f"Downloaded data since last IP address change: {downloaded_data_since_ip_change} MB",
-                            "YELLOW",
-                        )
-                    )
-                    thread = threading.Thread(
-                        target=MegaCmdHelper.print_progress,
-                        args=(
-                            1,
-                            time.time(),
-                            file_size,
-                        ),
-                    )
-                    thread.start()
-                    start_time = time.time()
-                    output, status = MegaCmdHelper.mega_get(
-                        mega_file_path, self.tmp_folder, self.max_download_time
-                    )
-                    end_time = time.time()
-                    download_time_in_seconds = end_time - start_time
-                    download_speed = int((file_size / download_time_in_seconds) * 8)
-                    thread.join()
-                    download_status.append((mega_file_path, status))
-                    if status == DownloadStatus.NO_ERROR:
-                        total_downloaded_data += file_size
-                        print(
-                            color_text(
-                                f"{filename} is downloaded successfully in {round(download_time_in_seconds / 60, 1)} mins (average download speed: {download_speed} Mbps)",
-                                "GREEN",
-                            )
-                        )
-                        print(
-                            color_text(
-                                f"Moving file ({filename}) to destination ({self.target_folder}) ...",
-                                "YELLOW",
-                            )
-                        )
-                        FileUtils.move_files_to_destination(
-                            self.tmp_folder, self.target_folder
-                        )
-                        print(
-                            color_text(f"{filename} is moved to destination", "GREEN")
-                        )
-                        print(
-                            color_text(
-                                f"Total downloaded data: {total_downloaded_data} MB",
-                                "GREEN",
-                            )
-                        )
-                    elif status == DownloadStatus.TIMEOUT_EXCEEDED:
-                        FileUtils.remove_mega_tmp_files(self.tmp_folder)
-                        print(
-                            color_text(
-                                f"{datetime.now()} Timeout exceeded during downloading {mega_file_path}",
-                                "RED",
-                            )
-                        )
-                    else:
-                        FileUtils.remove_mega_tmp_files(self.tmp_folder)
-                        print(
-                            color_text(
-                                f"{datetime.now()} Unexpected mega-get error encountered during downloading {mega_file_path}",
-                                "RED",
-                            )
-                        )
-                    downloaded_data_since_ip_change += file_size
+                    FileUtils.remove_mega_tmp_files(self.tmp_folder)
+                    print(color_text(f"{datetime.now()} Unexpected error encountered during downloading large file{mega_file_path}", "RED"))    
         return download_status
