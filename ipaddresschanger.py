@@ -20,14 +20,71 @@
 import logging
 import random
 import time
-
-from pyglinet.glinet import GlInet
+import json
 
 from fritzbox.fritzbox import Fritzbox, RequestError
+from spawnhelper import SpawnHelper, SpawnStatus
+from colortext import color_text
 
 class ChangeIpException(Exception):
     def __init__(self, message):
         super().__init__(message)
+
+
+class Glinet:
+    def __init__(self, glinet_password):
+        self.ip = "192.168.8.1"
+        self.password = glinet_password
+
+    @staticmethod
+    def send_request(command):
+        response = None
+        spawn_status, process_exit_code, output = SpawnHelper.spawn(command)
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                print(color_text(f"Output of {command}:\n[{output}]", "RED"))
+                raise ChangeIpException(f"The command '{command}' failed")
+            else:
+                response = json.loads(output)
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            print(color_text(f"Output of {command}:\n[{output}]", "RED"))
+            raise ChangeIpException(f"The command '{command}' failed due to timeout")
+        else:
+            print(color_text(f"Output of {command}:\n[{output}]", "RED"))
+            raise ChangeIpException(f"The command '{command}' failed due to unexpected error")
+        return response
+
+    def get_wireguard_group_list(self):
+        json_payload = '{\\\"module\\\":\\\"wg-client\\\",\\\"func\\\":\\\"get_group_list\\\",\\\"params\\\":{}}'
+        command = f"sshpass -p '{self.password}' ssh root@{self.ip} ubus call gl-session call '{json_payload}'"
+        group_list = Glinet.send_request(command)
+        return group_list["result"]
+
+    def get_wireguard_group_config_list(self, group_id):
+        json_payload = f'{{\\\"module\\\":\\\"wg-client\\\",\\\"func\\\":\\\"get_config_list\\\",\\\"params\\\":{{\\\"group_id\\\":{group_id}}}}}'
+        command = f"sshpass -p '{self.password}' ssh root@{self.ip} ubus call gl-session call '{json_payload}'"
+        config_list = Glinet.send_request(command)
+        return config_list["result"]
+
+    def wireguard_stop(self):
+        json_payload = '{\\\"module\\\":\\\"vpn-client\\\",\\\"func\\\":\\\"set_tunnel\\\",\\\"params\\\":{\\\"enabled\\\":false,\\\"tunnel_id\\\":10}}'
+        command = f"sshpass -p '{self.password}' ssh root@{self.ip} ubus call gl-session call '{json_payload}'"
+        Glinet.send_request(command)
+
+    def wireguard_start(self, group_id, peer_id):
+        json_payload = f'{{\\\"module\\\":\\\"vpn-client\\\",\\\"func\\\":\\\"set_tunnel\\\",\\\"params\\\":{{\\\"via\\\":{{\\\"type\\\":\\\"wireguard\\\",\\\"group_id\\\":{group_id},\\\"peer_id\\\":{peer_id}}},\\\"isTapS2s\\\":false,\\\"tunnel_id\\\":10}}}}'
+        command = f"sshpass -p '{self.password}' ssh root@{self.ip} ubus call gl-session call '{json_payload}'"
+        set_server = Glinet.send_request(command)
+        time.sleep(2)
+        json_payload = '{\\\"module\\\":\\\"vpn-client\\\",\\\"func\\\":\\\"set_tunnel\\\",\\\"params\\\":{\\\"enabled\\\":true,\\\"tunnel_id\\\":10}}'
+        command = f"sshpass -p '{self.password}' ssh root@{self.ip} ubus call gl-session call '{json_payload}'"
+        start = Glinet.send_request(command)
+
+    def get_wireguard_status(self):
+        json_payload = '{\\\"module\\\":\\\"vpn-client\\\",\\\"func\\\":\\\"get_status\\\",\\\"params\\\":{}}'
+        command = f"sshpass -p '{self.password}' ssh root@{self.ip} ubus call gl-session call '{json_payload}'"
+        status = Glinet.send_request(command)
+        return status["result"]["status_list"][0]
 
 
 class IpChangerFritzbox:
@@ -51,48 +108,32 @@ class IpChangerGlinet:
         self.vpn_provider = vpn_provider
 
     def change_ip(self):
-        logging.getLogger("glinet").setLevel(logging.CRITICAL)
-        glinet = GlInet(password=self.password, keep_alive=False)
-        glinet.login()
-        api_client = glinet.get_api_client()
-        groups = api_client.wg_client.get_group_list()["groups"]
+        glinet = Glinet(self.password)
+        groups = glinet.get_wireguard_group_list()["groups"]
         group_id = None
         for group in groups:
             if group["group_name"] == self.vpn_provider:
                 group_id = group["group_id"]
         if not group_id:
-            raise ChangeIpException(
-                f"Failed to change ip with error: {self.vpn_provider} not found as vpn provider"
-            )
-        peers = api_client.wg_client.get_config_list({"group_id": group_id})["peers"]
+            raise ChangeIpException(f"Failed to change ip with error: {self.vpn_provider} not found as vpn provider")
+        peers = glinet.get_wireguard_group_config_list(group_id)["peers"]
         while True:
-            api_client.wg_client.stop()
+            glinet.wireguard_stop()
             random_peer = random.choice(peers)
-            api_client.wg_client.start(
-                {"group_id": group_id, "peer_id": random_peer["peer_id"]}
-            )
+            glinet.wireguard_start(group_id, random_peer["peer_id"])
             print("Connecting to VPN server...")
             time.sleep(10)
-            current_vpn_connection_status = api_client.wg_client.get_status()["status"]
+            current_vpn_connection_status = glinet.get_wireguard_status()["status"]
             if current_vpn_connection_status == 1:
-                print(
-                    f"Connected to VPN server {random_peer['name']} with ip {api_client.wg_client.get_status()['domain']}"
-                )
+                print(f"Connected to VPN server {random_peer['name']} with ip {glinet.get_wireguard_status()['domain'][0]}")
                 break
             print(f"Connecting to VPN server {random_peer['name']} failed")
             print("Selecting another random server...")
-        glinet.logout()
 
     def __del__(self):
-        logging.getLogger("glinet").setLevel(logging.CRITICAL)
-        glinet = GlInet(password=self.password, keep_alive=False)
-        glinet.login()
-        api_client = glinet.get_api_client()
-        api_client.wg_client.stop()
-        print(
-            f"Stopped the connection to the VPN server ({api_client.wg_client.get_status()['domain']})"
-        )
-        glinet.logout()
+        glinet = Glinet(self.password)
+        glinet.wireguard_stop()
+        print(f"Stopped the connection to the VPN server ({glinet.get_wireguard_status()['domain'][0]})")
 
 class IpChangerHelper:
     router = None
