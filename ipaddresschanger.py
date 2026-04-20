@@ -26,6 +26,10 @@ from fritzbox.fritzbox import Fritzbox, RequestError
 from spawnhelper import SpawnHelper, SpawnStatus
 from colortext import color_text
 
+# Fill in this list with the names of your tailscale exit nodes
+# For example: tailscale_exit_nodes = ["exit_node_1", "exit_node_2", "exit_node_3"]
+tailscale_exit_nodes = []
+
 class ChangeIpException(Exception):
     def __init__(self, message):
         super().__init__(message)
@@ -132,8 +136,49 @@ class IpChangerGlinet:
 
     def __del__(self):
         glinet = Glinet(self.password)
+        print(f"Stopping the connection to the VPN server")
         glinet.wireguard_stop()
-        print(f"Stopped the connection to the VPN server ({glinet.get_wireguard_status()['domain'][0]})")
+
+class IpChangerTailscale:
+    exit_node_index = 0
+    exit_nodes = tailscale_exit_nodes
+
+    def __init__(self):
+        pass
+
+    def change_ip(self):
+        command = f"tailscale set --exit-node \"{IpChangerTailscale.exit_nodes[IpChangerTailscale.exit_node_index]}\""
+        print(f"Changing ip by setting a Tailscale exit node (exit node name: {IpChangerTailscale.exit_nodes[IpChangerTailscale.exit_node_index]})...")
+        spawn_status, process_exit_code, output = SpawnHelper.spawn(command)
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                print(color_text(f"Output of {command}:\n[{output}]", "RED"))
+                raise ChangeIpException(f"The command '{command}' failed")
+            else:
+                time.sleep(5)
+                print(f"Tailscale exit node is set (exit node name: {IpChangerTailscale.exit_nodes[IpChangerTailscale.exit_node_index]})")
+                IpChangerTailscale.exit_node_index = IpChangerTailscale.exit_node_index + 1
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            print(color_text(f"Output of {command}:\n[{output}]", "RED"))
+            raise ChangeIpException(f"The command '{command}' failed due to timeout")
+        else:
+            print(color_text(f"Output of {command}:\n[{output}]", "RED"))
+            raise ChangeIpException(f"The command '{command}' failed due to unexpected error")
+
+    def __del__(self):
+        command = f"tailscale set --exit-node="
+        print(f"Deactivating routing traffic through Tailscale exit node")
+        spawn_status, process_exit_code, output = SpawnHelper.spawn(command)
+        if spawn_status == SpawnStatus.NO_ERROR:
+            if process_exit_code != 0:
+                print(color_text(f"Output of {command}:\n[{output}]", "RED"))
+                raise ChangeIpException(f"The command '{command}' failed")
+        elif spawn_status == SpawnStatus.TIMEOUT:
+            print(color_text(f"Output of {command}:\n[{output}]", "RED"))
+            raise ChangeIpException(f"The command '{command}' failed due to timeout")
+        else:
+            print(color_text(f"Output of {command}:\n[{output}]", "RED"))
+            raise ChangeIpException(f"The command '{command}' failed due to unexpected error")
 
 class IpChangerHelper:
     router = None
@@ -158,3 +203,5 @@ class IpChangerHelper:
             return IpChangerFritzbox()
         elif IpChangerHelper.router == 'glinet':
             return IpChangerGlinet(IpChangerHelper.password, IpChangerHelper.vpn_provider)
+        elif IpChangerHelper.router == 'tailscale':
+            return IpChangerTailscale()

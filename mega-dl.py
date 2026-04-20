@@ -32,8 +32,10 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "-r",
     "--router",
+    "-ipc",
+    "--ip-changer",
     required=True,
-    help="Router to be used, can be [glinet|fritzbox]",
+    help="IP changer to be used, can be [glinet|fritzbox|tailscale]",
 )
 parser.add_argument(
     "-p",
@@ -74,7 +76,7 @@ if force_logout:
 if MegaCmdHelper.is_logged_in():
     print(color_text("Session ongoing, aborting...", "RED"))
     print(color_text("Use the option --force-logout to force logging out", "RED"))
-elif (router != 'fritzbox') and (router != 'glinet'):
+elif (router != 'fritzbox') and (router != 'glinet') and (router != 'tailscale'):
     print(color_text("Choose a valid router value [fritzbox|glinet]", "RED"))
 else:
     IpChangerHelper.set_router(router)
